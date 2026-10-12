@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與各倉別對比分析工具 (V7 含跨日日期)</title>
+    <title>盤盈虧彙總與各倉別對比分析工具</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -232,7 +232,7 @@
 <div class="container">
     <header>
         <h1>📦 盤盈虧彙總與各倉別對比分析工具</h1>
-        <p>上傳第一工作表「盤盈虧彙總表」，會自動掃描全表並顯示完整的盤點日期區間。</p>
+        <p>上傳第一工作表「盤盈虧彙總表」，自動掃描日期並匯出格式如「盤盈虧彙總表0314_0315.xlsx」之報表。</p>
     </header>
 
     <div class="upload-section" id="dropZone">
@@ -367,6 +367,7 @@ let rawData = [];
 let warehouseSummary = [];
 let overallKPI = {};
 let detectedInventoryDateStr = "";
+let dateFileNameSegment = "";
 
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -393,6 +394,18 @@ function handleFile(file) {
         parseSheetData(json);
     };
     reader.readAsArrayBuffer(file);
+}
+
+// 轉換日期為 MMDD 格式（例：2026/03/14 -> 0314）
+function formatMMDD(dateStr) {
+    if (!dateStr) return "";
+    const parts = dateStr.split(/[/.-]/);
+    if (parts.length >= 3) {
+        const month = parts[1].padStart(2, '0');
+        const day = parts[2].padStart(2, '0');
+        return month + day;
+    }
+    return dateStr.replace(/[^0-9]/g, '');
 }
 
 function parseSheetData(rows) {
@@ -428,7 +441,6 @@ function parseSheetData(rows) {
     const cDiffAmt = getCol('盤盈虧金額');
     const cStockAmt = getCol('庫存金額');
 
-    // 🎯 蒐集全表不重複的盤點日期
     const dateSet = new Set();
 
     for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -459,14 +471,18 @@ function parseSheetData(rows) {
         });
     }
 
-    // 格式化日期顯示（例如：2026/03/14 ~ 2026/03/15）
     const sortedDates = Array.from(dateSet).sort();
     if (sortedDates.length === 0) {
         detectedInventoryDateStr = "未填寫";
+        dateFileNameSegment = "";
     } else if (sortedDates.length === 1) {
         detectedInventoryDateStr = sortedDates[0];
+        dateFileNameSegment = formatMMDD(sortedDates[0]);
     } else {
         detectedInventoryDateStr = `${sortedDates[0]} ~ ${sortedDates[sortedDates.length - 1]} (共 ${sortedDates.length} 天)`;
+        const startMMDD = formatMMDD(sortedDates[0]);
+        const endMMDD = formatMMDD(sortedDates[sortedDates.length - 1]);
+        dateFileNameSegment = `${startMMDD}_${endMMDD}`;
     }
 
     processSummary();
@@ -898,7 +914,10 @@ async function exportStyledExcel() {
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `盤盈虧美化分析報表_${detectedInventoryDateStr.replace(/[/]/g, '')}.xlsx`;
+    
+    // 檔名格式為「盤盈虧彙總表MMDD_MMDD.xlsx」
+    const outFileName = dateFileNameSegment ? `盤盈虧彙總表${dateFileNameSegment}.xlsx` : `盤盈虧彙總表.xlsx`;
+    link.download = outFileName;
     link.click();
 }
 </script>
