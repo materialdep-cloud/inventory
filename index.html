@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>盤盈虧彙總與各倉別對比分析工具 (V7 含跨日日期)</title>
+    <!-- SheetJS for reading Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- ExcelJS for styling exported Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+    <style>
+        :root {
+            --primary: #10b981;
+            --primary-dark: #059669;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+            --border-color: #cbd5e1;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            color: white;
+            padding: 20px 28px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        header h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+        header p { margin: 0; opacity: 0.85; font-size: 0.9rem; }
+
+        .upload-section {
+            background: var(--card-bg);
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-section:hover, .upload-section.dragover {
+            border-color: var(--primary);
+            background-color: #f0fdf4;
+        }
+
+        .upload-btn {
+            background-color: var(--primary);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 6px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            display: inline-block;
+        }
+
+        .upload-btn:hover { background-color: var(--primary-dark); }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #64748b;
+            cursor: pointer;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .tab-btn.active {
+            color: var(--primary-dark);
+            border-bottom: 3px solid var(--primary);
+            background: white;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .excel-box {
+            border-collapse: collapse;
+            font-size: 0.88rem;
+            width: 100%;
+        }
+
+        .excel-box th, .excel-box td {
+            border: 1px solid #64748b;
+            padding: 6px 10px;
+            text-align: center;
+        }
+
+        .formula-box {
+            margin-bottom: 12px;
+            font-size: 0.85rem;
+        }
+        .formula-qty {
+            background-color: #dbeafe;
+            color: #1e40af;
+            padding: 6px 12px;
+            border: 1px solid #bfdbfe;
+            margin-bottom: 4px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .formula-amt {
+            background-color: #ffedd5;
+            color: #9a3412;
+            padding: 6px 12px;
+            border: 1px solid #fed7aa;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .all-kpi-table th { background-color: #f1f5f9; font-weight: bold; }
+        .target-row { background-color: #84cc16 !important; color: #000; font-weight: bold; }
+
+        .date-badge {
+            display: inline-block;
+            background-color: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .table-responsive { overflow-x: auto; }
+
+        table.sheet-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: right;
+        }
+
+        table.sheet-table th, table.sheet-table td {
+            border: 1px solid #cbd5e1;
+            padding: 6px 8px;
+            white-space: nowrap;
+        }
+
+        table.sheet-table th {
+            background-color: #ffffff;
+            color: #000;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .col-abs-qty { background-color: #ecfccb; }
+        .col-qty-pct { background-color: #dbeafe; }
+        .col-abs-qty-pct { background-color: #dbeafe; }
+        .col-abs-amt { background-color: #fef9c3; }
+        .col-amt-pct { background-color: #dcfce7; }
+        .col-abs-amt-pct { background-color: #dbeafe; }
+
+        .text-red { color: #dc2626; }
+        .text-bold { font-weight: bold; }
+
+        .filter-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .filter-bar input, .filter-bar select {
+            padding: 6px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.88rem;
+        }
+
+        .export-btn {
+            background-color: #2563eb;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 4px rgba(37,99,235,0.2);
+            transition: all 0.2s;
+        }
+
+        .export-btn:hover { background-color: #1d4ed8; transform: translateY(-1px); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>📦 盤盈虧彙總與各倉別對比分析工具</h1>
+        <p>上傳第一工作表「盤盈虧彙總表」，會自動掃描全表並顯示完整的盤點日期區間。</p>
+    </header>
+
+    <div class="upload-section" id="dropZone">
+        <p style="margin: 0; font-size: 1rem; color: #475569;">拖曳 Excel 檔案至此處，或點擊下方按鈕上傳</p>
+        <input type="file" id="fileInput" accept=".xlsx, .xls" style="display: none;">
+        <button class="upload-btn" onclick="document.getElementById('fileInput').click()">選擇 Excel 檔案</button>
+    </div>
+
+    <div id="contentArea" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div class="tabs" style="margin-bottom: 0;">
+                <button class="tab-btn active" onclick="switchTab('summary')">📊 各倉別對比 (含全倉包材拆分)</button>
+                <button class="tab-btn" onclick="switchTab('detail')">📋 盤盈虧明細表</button>
+            </div>
+            <button class="export-btn" onclick="exportStyledExcel()">🎨 匯出完整美化 Excel 檔 (含雙工作表)</button>
+        </div>
+
+        <!-- Tab 1: 各倉別對比 -->
+        <div id="summaryTab" class="card">
+            <div id="dateDisplayArea" class="date-badge">📅 盤點日期：<span id="inventoryDateSpan">-</span></div>
+            
+            <div class="layout-grid">
+                <!-- 左側：公式說明與 ALL 彙總指標表 -->
+                <div>
+                    <div class="formula-box">
+                        <div class="formula-qty">盤盈虧數量% = 盤盈虧數量 / 庫存數量</div>
+                        <div class="formula-amt">盤盈虧金額差異% = 盤盈虧金額 / 庫存金額</div>
+                    </div>
+
+                    <table class="excel-box all-kpi-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" style="font-size:1.1rem; width:50px;">A L L</th>
+                                <th>盤盈虧數量%</th>
+                                <th>盤盈虧數量絕對值%</th>
+                                <th>盤盈虧金額%</th>
+                                <th>盤盈虧金額(絕對值)%</th>
+                            </tr>
+                            <tr>
+                                <td id="kpiDiffQtyPct">0.000%</td>
+                                <td id="kpiAbsDiffQtyPct">0.000%</td>
+                                <td id="kpiDiffAmtPct">0.000%</td>
+                                <td id="kpiAbsDiffAmtPct">0.000%</td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="target-row">
+                                <td>目標</td>
+                                <td>±0.2%</td>
+                                <td></td>
+                                <td>±20000</td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td id="kpiDiffAmtVal" class="text-red">-</td>
+                                <td id="kpiAbsDiffAmtVal">0</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 右側：主表格各倉別對比 -->
+                <div class="table-responsive">
+                    <table class="sheet-table" id="summaryTable">
+                        <thead>
+                            <tr>
+                                <th>ＡＬＬ</th>
+                                <th>庫存數量</th>
+                                <th>盤點數量</th>
+                                <th>盤盈虧數量</th>
+                                <th>盤盈虧金額</th>
+                                <th>庫存金額</th>
+                                <th class="col-abs-qty">盤盈虧數量<br>(絕對值)</th>
+                                <th class="col-qty-pct">盤盈虧數量%</th>
+                                <th class="col-abs-qty-pct">盤盈虧數量<br>(絕對值)%</th>
+                                <th class="col-abs-amt">盤盈虧金額<br>(絕對值)</th>
+                                <th class="col-amt-pct">盤盈虧金額<br>差異%</th>
+                                <th class="col-abs-amt-pct">盤盈虧金額差異<br>(絕對值)%</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: 明細篩選 -->
+        <div id="detailTab" class="card" style="display: none;">
+            <div class="filter-bar">
+                <input type="text" id="searchInput" placeholder="搜尋品項名稱/代號..." oninput="renderDetailTable()">
+                <select id="warehouseFilter" onchange="renderDetailTable()">
+                    <option value="">全部倉庫</option>
+                </select>
+                <select id="diffFilter" onchange="renderDetailTable()">
+                    <option value="all">全部分項</option>
+                    <option value="diff">僅顯示有盤盈虧 (≠0)</option>
+                    <option value="plus">僅顯示盤盈 (>0)</option>
+                    <option value="minus">僅顯示盤虧 (<0)</option>
+                </select>
+            </div>
+            <div class="table-responsive">
+                <table class="sheet-table" id="detailTable">
+                    <thead>
+                        <tr>
+                            <th>盤點日期</th>
+                            <th>盤點單號</th>
+                            <th>品類</th>
+                            <th>品項代號</th>
+                            <th>品項名稱</th>
+                            <th>單位</th>
+                            <th>倉庫</th>
+                            <th>庫存數量</th>
+                            <th>盤點數量</th>
+                            <th>盤盈虧數量</th>
+                            <th>單位成本</th>
+                            <th>盤盈虧金額</th>
+                            <th>庫存金額</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let rawData = [];
+let warehouseSummary = [];
+let overallKPI = {};
+let detectedInventoryDateStr = "";
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+});
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+        parseSheetData(json);
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function parseSheetData(rows) {
+    rawData = [];
+    let headerIdx = -1;
+
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        if (rows[i] && rows[i].includes('倉庫') && rows[i].includes('庫存數量')) {
+            headerIdx = i;
+            break;
+        }
+    }
+
+    if (headerIdx === -1) {
+        alert('無法解析表頭！請確認上傳檔案包含「倉庫」、「庫存數量」、「盤點數量」等欄位。');
+        return;
+    }
+
+    const headers = rows[headerIdx];
+    const getCol = (name) => headers.indexOf(name);
+
+    const cDate = getCol('盤點日期');
+    const cNo = getCol('盤點單號');
+    const cCategory = getCol('品類');
+    const cCode = getCol('品項代號');
+    const cName = getCol('品項名稱');
+    const cUnit = getCol('庫存單位');
+    const cWH = getCol('倉庫');
+    const cStockQty = getCol('庫存數量');
+    const cCheckQty = getCol('盤點數量');
+    const cDiffQty = getCol('盤盈虧數量');
+    const cCost = getCol('單位成本');
+    const cDiffAmt = getCol('盤盈虧金額');
+    const cStockAmt = getCol('庫存金額');
+
+    // 🎯 蒐集全表不重複的盤點日期
+    const dateSet = new Set();
+
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        const wh = row[cWH] ? String(row[cWH]).trim() : '';
+        if (!wh || wh === '倉庫' || wh.includes('ALL') || wh.includes('合計') || wh.includes('總計')) continue;
+
+        const code = row[cCode] ? String(row[cCode]).trim() : '';
+        const dVal = row[cDate] ? String(row[cDate]).trim() : '';
+        if (dVal) dateSet.add(dVal);
+
+        rawData.push({
+            date: dVal,
+            no: row[cNo] || '',
+            category: row[cCategory] || '',
+            code: code,
+            name: row[cName] || '',
+            unit: row[cUnit] || '',
+            warehouse: wh,
+            stockQty: parseFloat(String(row[cStockQty]).replace(/,/g, '')) || 0,
+            checkQty: parseFloat(String(row[cCheckQty]).replace(/,/g, '')) || 0,
+            diffQty: parseFloat(String(row[cDiffQty]).replace(/,/g, '')) || 0,
+            cost: parseFloat(String(row[cCost]).replace(/,/g, '')) || 0,
+            diffAmt: parseFloat(String(row[cDiffAmt]).replace(/,/g, '')) || 0,
+            stockAmt: parseFloat(String(row[cStockAmt]).replace(/,/g, '')) || 0
+        });
+    }
+
+    // 格式化日期顯示（例如：2026/03/14 ~ 2026/03/15）
+    const sortedDates = Array.from(dateSet).sort();
+    if (sortedDates.length === 0) {
+        detectedInventoryDateStr = "未填寫";
+    } else if (sortedDates.length === 1) {
+        detectedInventoryDateStr = sortedDates[0];
+    } else {
+        detectedInventoryDateStr = `${sortedDates[0]} ~ ${sortedDates[sortedDates.length - 1]} (共 ${sortedDates.length} 天)`;
+    }
+
+    processSummary();
+    document.getElementById('contentArea').style.display = 'block';
+}
+
+function processSummary() {
+    const whOrder = [
+        "綠園二廠/總倉", "綠園二廠/包材倉", "綠園二廠/待處理倉", "包裝/成品倉", "包裝/原料倉", "包裝/原料倉(包材)",
+        "63-7倉", "63-6倉/上層", "63-5倉/常溫料架區", "63-7倉/待處理倉", "車棚1倉/包材倉", 
+        "車棚2倉/久儲包材倉", "63-5倉/低溫倉", "63-6倉/下層/理貨倉", "理貨倉(包材)", "63-6倉/下層/直腳倉"
+    ];
+
+    const whMap = {};
+    whOrder.forEach(name => {
+        whMap[name] = { warehouse: name, stockQty: 0, checkQty: 0, diffQty: 0, absDiffQty: 0, stockAmt: 0, diffAmt: 0, absDiffAmt: 0, count: 0 };
+    });
+
+    let totalStockQty = 0, totalCheckQty = 0, totalDiffQty = 0, totalAbsDiffQty = 0;
+    let totalStockAmt = 0, totalDiffAmt = 0, totalAbsDiffAmt = 0;
+
+    rawData.forEach(item => {
+        let whKey = item.warehouse;
+
+        if (item.warehouse.includes("理貨倉") && item.code.toUpperCase().startsWith("Z")) {
+            whKey = "理貨倉(包材)";
+        } else if (item.warehouse.includes("包裝/原料倉") && item.code.toUpperCase().startsWith("Z")) {
+            whKey = "包裝/原料倉(包材)";
+        }
+
+        if (!whMap[whKey]) {
+            whMap[whKey] = { warehouse: whKey, stockQty: 0, checkQty: 0, diffQty: 0, absDiffQty: 0, stockAmt: 0, diffAmt: 0, absDiffAmt: 0, count: 0 };
+        }
+
+        whMap[whKey].stockQty += item.stockQty;
+        whMap[whKey].checkQty += item.checkQty;
+        whMap[whKey].diffQty += item.diffQty;
+        whMap[whKey].absDiffQty += Math.abs(item.diffQty);
+        whMap[whKey].stockAmt += item.stockAmt;
+        whMap[whKey].diffAmt += item.diffAmt;
+        whMap[whKey].absDiffAmt += Math.abs(item.diffAmt);
+        whMap[whKey].count++;
+
+        totalStockQty += item.stockQty;
+        totalCheckQty += item.checkQty;
+        totalDiffQty += item.diffQty;
+        totalAbsDiffQty += Math.abs(item.diffQty);
+        totalStockAmt += item.stockAmt;
+        totalDiffAmt += item.diffAmt;
+        totalAbsDiffAmt += Math.abs(item.diffAmt);
+    });
+
+    warehouseSummary = Object.values(whMap).filter(w => w.count > 0 || whOrder.includes(w.warehouse));
+
+    overallKPI = {
+        totalStockQty, totalCheckQty, totalDiffQty, totalAbsDiffQty,
+        totalStockAmt, totalDiffAmt, totalAbsDiffAmt
+    };
+
+    document.getElementById('inventoryDateSpan').innerText = detectedInventoryDateStr;
+
+    renderKPI();
+    renderSummaryTable();
+    populateWarehouseFilter();
+    renderDetailTable();
+}
+
+function fmtNum(val, decimals = 2) {
+    if (val === 0) return '0.00';
+    return val.toLocaleString('zh-TW', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function fmtInt(val) {
+    return Math.round(val).toLocaleString('zh-TW');
+}
+
+function fmtPct(val) {
+    if (!val) return '0.00%';
+    return (val * 100).toFixed(2) + '%';
+}
+
+function fmtPct3(val) {
+    if (!val) return '0.000%';
+    return (val * 100).toFixed(3) + '%';
+}
+
+function renderKPI() {
+    const qtyPct = overallKPI.totalStockQty ? overallKPI.totalDiffQty / overallKPI.totalStockQty : 0;
+    const absQtyPct = overallKPI.totalStockQty ? overallKPI.totalAbsDiffQty / overallKPI.totalStockQty : 0;
+    const amtPct = overallKPI.totalStockAmt ? overallKPI.totalDiffAmt / overallKPI.totalStockAmt : 0;
+    const absAmtPct = overallKPI.totalStockAmt ? overallKPI.totalAbsDiffAmt / overallKPI.totalStockAmt : 0;
+
+    document.getElementById('kpiDiffQtyPct').innerText = fmtPct3(qtyPct);
+    document.getElementById('kpiAbsDiffQtyPct').innerText = fmtPct3(absQtyPct);
+    document.getElementById('kpiDiffAmtPct').innerText = fmtPct3(amtPct);
+    document.getElementById('kpiAbsDiffAmtPct').innerText = fmtPct3(absAmtPct);
+
+    document.getElementById('kpiDiffAmtVal').innerText = '- ' + fmtInt(Math.abs(overallKPI.totalDiffAmt));
+    document.getElementById('kpiAbsDiffAmtVal').innerText = fmtInt(overallKPI.totalAbsDiffAmt);
+}
+
+function renderSummaryTable() {
+    const tbody = document.querySelector('#summaryTable tbody');
+    tbody.innerHTML = '';
+
+    warehouseSummary.forEach(row => {
+        const isNoCheck = row.count === 0 && row.stockQty === 0;
+
+        const qtyPct = row.stockQty ? row.diffQty / row.stockQty : 0;
+        const absQtyPct = row.stockQty ? row.absDiffQty / row.stockQty : 0;
+        const amtPct = row.stockAmt ? row.diffAmt / row.stockAmt : 0;
+        const absAmtPct = row.stockAmt ? row.absDiffAmt / row.stockAmt : 0;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="text-align:left; font-weight:bold;">${row.warehouse}</td>
+            <td>${fmtNum(row.stockQty)}</td>
+            <td>${fmtNum(row.checkQty)}</td>
+            <td class="${row.diffQty < 0 ? 'text-red' : ''}">${fmtNum(row.diffQty)}</td>
+            <td class="${row.diffAmt < 0 ? 'text-red' : ''}">${fmtNum(row.diffAmt)}</td>
+            <td>${fmtInt(row.stockAmt)}</td>
+            <td class="col-abs-qty">${fmtNum(row.absDiffQty)}</td>
+            <td class="col-qty-pct">${isNoCheck ? '無盤點' : fmtPct(qtyPct)}</td>
+            <td class="col-abs-qty-pct">${isNoCheck ? '無盤點' : fmtPct(absQtyPct)}</td>
+            <td class="col-abs-amt">${fmtInt(row.absDiffAmt)}</td>
+            <td class="col-amt-pct">${isNoCheck ? '無盤點' : fmtPct(amtPct)}</td>
+            <td class="col-abs-amt-pct">${isNoCheck ? '無盤點' : fmtPct(absAmtPct)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function populateWarehouseFilter() {
+    const select = document.getElementById('warehouseFilter');
+    select.innerHTML = '<option value="">全部倉庫</option>';
+    warehouseSummary.forEach(w => {
+        if (w.count > 0) {
+            const opt = document.createElement('option');
+            opt.value = w.warehouse;
+            opt.textContent = w.warehouse;
+            select.appendChild(opt);
+        }
+    });
+}
+
+function renderDetailTable() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const whFilter = document.getElementById('warehouseFilter').value;
+    const diffFilter = document.getElementById('diffFilter').value;
+
+    const tbody = document.querySelector('#detailTable tbody');
+    tbody.innerHTML = '';
+
+    const filtered = rawData.filter(item => {
+        let currentWH = item.warehouse;
+        if (item.warehouse.includes("理貨倉") && item.code.toUpperCase().startsWith("Z")) {
+            currentWH = "理貨倉(包材)";
+        } else if (item.warehouse.includes("包裝/原料倉") && item.code.toUpperCase().startsWith("Z")) {
+            currentWH = "包裝/原料倉(包材)";
+        }
+
+        const matchSearch = item.name.toLowerCase().includes(search) || item.code.toLowerCase().includes(search);
+        const matchWH = !whFilter || currentWH === whFilter || item.warehouse === whFilter;
+        let matchDiff = true;
+
+        if (diffFilter === 'diff') matchDiff = item.diffQty !== 0;
+        else if (diffFilter === 'plus') matchDiff = item.diffQty > 0;
+        else if (diffFilter === 'minus') matchDiff = item.diffQty < 0;
+
+        return matchSearch && matchWH && matchDiff;
+    });
+
+    filtered.forEach(item => {
+        let displayWH = item.warehouse;
+        if (item.warehouse.includes("理貨倉") && item.code.toUpperCase().startsWith("Z")) {
+            displayWH = "理貨倉(包材)";
+        } else if (item.warehouse.includes("包裝/原料倉") && item.code.toUpperCase().startsWith("Z")) {
+            displayWH = "包裝/原料倉(包材)";
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${item.date}</td>
+            <td>${item.no}</td>
+            <td>${item.category}</td>
+            <td>${item.code}</td>
+            <td style="text-align:left;">${item.name}</td>
+            <td>${item.unit}</td>
+            <td style="text-align:left;">${displayWH}</td>
+            <td>${fmtNum(item.stockQty)}</td>
+            <td>${fmtNum(item.checkQty)}</td>
+            <td class="${item.diffQty < 0 ? 'text-red' : ''}">${fmtNum(item.diffQty)}</td>
+            <td>$${fmtNum(item.cost, 4)}</td>
+            <td class="${item.diffAmt < 0 ? 'text-red' : ''}">$${fmtNum(item.diffAmt)}</td>
+            <td>$${fmtInt(item.stockAmt)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    if (tab === 'summary') {
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        document.getElementById('summaryTab').style.display = 'block';
+        document.getElementById('detailTab').style.display = 'none';
+    } else {
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        document.getElementById('summaryTab').style.display = 'none';
+        document.getElementById('detailTab').style.display = 'block';
+    }
+}
+
+// 🎨 使用 ExcelJS 生成完整美化 Excel 檔 (含雙工作表)
+async function exportStyledExcel() {
+    const workbook = new ExcelJS.Workbook();
+    
+    // -------------------------------------------------------------
+    // Sheet 1: 各倉別(理貨拆)
+    // -------------------------------------------------------------
+    const ws1 = workbook.addWorksheet('各倉別(理貨拆)');
+    ws1.views = [{ showGridLines: true }];
+
+    const thinBorder = {
+        top: { style: 'thin', color: { argb: 'FF64748B' } },
+        left: { style: 'thin', color: { argb: 'FF64748B' } },
+        bottom: { style: 'thin', color: { argb: 'FF64748B' } },
+        right: { style: 'thin', color: { argb: 'FF64748B' } }
+    };
+
+    const fontStyle = { name: '微軟正黑體', size: 10 };
+
+    // 公式說明
+    ws1.mergeCells('A1:E1');
+    ws1.getCell('A1').value = '盤盈虧數量%=盤盈虧數量/庫存數量';
+    ws1.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+    ws1.getCell('A1').font = { ...fontStyle, size: 9, color: { argb: 'FF1E40AF' }, bold: true };
+
+    ws1.mergeCells('A2:E2');
+    ws1.getCell('A2').value = '盤盈虧金額差異%=盤盈虧金額/庫存金額';
+    ws1.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+    ws1.getCell('A2').font = { ...fontStyle, size: 9, color: { argb: 'FF9A3412' }, bold: true };
+
+    // 盤點日期顯示於 A4
+    if (detectedInventoryDateStr) {
+        ws1.getCell('A4').value = "盤點日期：" + detectedInventoryDateStr;
+        ws1.getCell('A4').font = { ...fontStyle, bold: true, color: { argb: 'FF1E40AF' } };
+    }
+
+    // 左側 ALL KPI 指標表 (A5:E8)
+    const kpiHeaders = ["A L L", "盤盈虧數量%", "盤盈虧數量絕對值%", "盤盈虧金額%", "盤盈虧金額(絕對值)%"];
+    const qtyPct = overallKPI.totalStockQty ? overallKPI.totalDiffQty / overallKPI.totalStockQty : 0;
+    const absQtyPct = overallKPI.totalStockQty ? overallKPI.totalAbsDiffQty / overallKPI.totalStockQty : 0;
+    const amtPct = overallKPI.totalStockAmt ? overallKPI.totalDiffAmt / overallKPI.totalStockAmt : 0;
+    const absAmtPct = overallKPI.totalStockAmt ? overallKPI.totalAbsDiffAmt / overallKPI.totalStockAmt : 0;
+
+    ws1.mergeCells('A5:A6');
+    ws1.getCell('A5').value = "A L L";
+    ws1.getCell('A5').font = { ...fontStyle, size: 12, bold: true };
+    ws1.getCell('A5').alignment = { vertical: 'middle', horizontal: 'center' };
+
+    for (let col = 2; col <= 5; col++) {
+        const cell = ws1.getCell(5, col);
+        cell.value = kpiHeaders[col - 1];
+        cell.font = { ...fontStyle, bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        cell.alignment = { horizontal: 'center' };
+    }
+
+    const kpiVals = [qtyPct, absQtyPct, amtPct, absAmtPct];
+    for (let col = 2; col <= 5; col++) {
+        const cell = ws1.getCell(6, col);
+        cell.value = kpiVals[col - 2];
+        cell.numFmt = '0.000%';
+        cell.font = fontStyle;
+        cell.alignment = { horizontal: 'center' };
+    }
+
+    // 目標列
+    ws1.getCell('A7').value = "目標";
+    ws1.getCell('B7').value = "±0.2%";
+    ws1.getCell('D7').value = "±20000";
+
+    ['A7', 'B7', 'C7', 'D7', 'E7'].forEach(cellRef => {
+        const cell = ws1.getCell(cellRef);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF84CC16' } };
+        cell.font = { ...fontStyle, bold: true };
+        cell.alignment = { horizontal: 'center' };
+    });
+
+    // 總額列
+    ws1.getCell('D8').value = overallKPI.totalDiffAmt;
+    ws1.getCell('D8').numFmt = '-#,##0';
+    ws1.getCell('D8').font = { ...fontStyle, color: { argb: 'FFDC2626' }, bold: true };
+    ws1.getCell('D8').alignment = { horizontal: 'center' };
+
+    ws1.getCell('E8').value = overallKPI.totalAbsDiffAmt;
+    ws1.getCell('E8').numFmt = '#,##0';
+    ws1.getCell('E8').font = { ...fontStyle, bold: true };
+    ws1.getCell('E8').alignment = { horizontal: 'center' };
+
+    for (let r = 5; r <= 8; r++) {
+        for (let c = 1; c <= 5; c++) {
+            ws1.getCell(r, c).border = thinBorder;
+        }
+    }
+
+    // 右側主表 (G1 開始)
+    const mainHeaders = [
+        "ＡＬＬ", "庫存數量", "盤點數量", "盤盈虧數量", "盤盈虧金額", "庫存金額",
+        "盤盈虧數量(絕對值)", "盤盈虧數量%", "盤盈虧數量(絕對值)%", "盤盈虧金額(絕對值)", "盤盈虧金額差異%", "盤盈虧金額差異(絕對值)%"
+    ];
+
+    mainHeaders.forEach((h, idx) => {
+        const cell = ws1.getCell(1, 7 + idx);
+        cell.value = h;
+        cell.font = { ...fontStyle, bold: true };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = thinBorder;
+    });
+
+    ws1.getRow(1).height = 28;
+
+    warehouseSummary.forEach((row, rowIdx) => {
+        const rNum = 2 + rowIdx;
+        const isNoCheck = row.count === 0 && row.stockQty === 0;
+
+        const qPct = row.stockQty ? row.diffQty / row.stockQty : 0;
+        const absQPct = row.stockQty ? row.absDiffQty / row.stockQty : 0;
+        const aPct = row.stockAmt ? row.diffAmt / row.stockAmt : 0;
+        const absAPct = row.stockAmt ? row.absDiffAmt / row.stockAmt : 0;
+
+        const rowData = [
+            row.warehouse, row.stockQty, row.checkQty, row.diffQty, row.diffAmt, row.stockAmt,
+            row.absDiffQty, isNoCheck ? "無盤點" : qPct, isNoCheck ? "無盤點" : absQPct,
+            row.absDiffAmt, isNoCheck ? "無盤點" : aPct, isNoCheck ? "無盤點" : absAPct
+        ];
+
+        rowData.forEach((val, colIdx) => {
+            const cell = ws1.getCell(rNum, 7 + colIdx);
+            cell.value = val;
+            cell.font = fontStyle;
+            cell.border = thinBorder;
+
+            if (colIdx === 0) {
+                cell.alignment = { horizontal: 'left' };
+            } else if (typeof val === 'number') {
+                if (colIdx === 1 || colIdx === 2 || colIdx === 3 || colIdx === 6) cell.numFmt = '#,##0.00';
+                else if (colIdx === 4 || colIdx === 5 || colIdx === 9) cell.numFmt = '#,##0';
+                else if (colIdx === 7 || colIdx === 8 || colIdx === 10 || colIdx === 11) cell.numFmt = '0.00%';
+                
+                if (val < 0) cell.font = { ...fontStyle, color: { argb: 'FFDC2626' } };
+            } else {
+                cell.alignment = { horizontal: 'center' };
+            }
+
+            if (colIdx === 6) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECFCCB' } };
+            else if (colIdx === 7 || colIdx === 8) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+            else if (colIdx === 9) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE9E6' } };
+            else if (colIdx === 10) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+            else if (colIdx === 11) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+        });
+    });
+
+    ws1.columns = [
+        { width: 14 }, { width: 16 }, { width: 18 }, { width: 16 }, { width: 18 }, { width: 4 },
+        { width: 22 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 15 },
+        { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 16 }, { width: 16 }
+    ];
+
+    // -------------------------------------------------------------
+    // Sheet 2: 盤盈虧明細表
+    // -------------------------------------------------------------
+    const ws2 = workbook.addWorksheet('盤盈虧明細表');
+    ws2.views = [{ showGridLines: true }];
+
+    const detailHeaders = [
+        "盤點日期", "盤點單號", "品類", "品項代號", "品項名稱", "庫存單位", "倉庫",
+        "庫存數量", "盤點數量", "盤盈虧數量", "單位成本", "盤盈虧金額", "庫存金額"
+    ];
+
+    detailHeaders.forEach((h, idx) => {
+        const cell = ws2.getCell(1, idx + 1);
+        cell.value = h;
+        cell.font = { ...fontStyle, bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = thinBorder;
+    });
+
+    ws2.getRow(1).height = 24;
+
+    rawData.forEach((item, idx) => {
+        const rNum = idx + 2;
+        let displayWH = item.warehouse;
+        if (item.warehouse.includes("理貨倉") && item.code.toUpperCase().startsWith("Z")) displayWH = "理貨倉(包材)";
+        else if (item.warehouse.includes("包裝/原料倉") && item.code.toUpperCase().startsWith("Z")) displayWH = "包裝/原料倉(包材)";
+
+        const rowValues = [
+            item.date, item.no, item.category, item.code, item.name, item.unit, displayWH,
+            item.stockQty, item.checkQty, item.diffQty, item.cost, item.diffAmt, item.stockAmt
+        ];
+
+        rowValues.forEach((val, colIdx) => {
+            const cell = ws2.getCell(rNum, colIdx + 1);
+            cell.value = val;
+            cell.font = fontStyle;
+            cell.border = thinBorder;
+
+            if (colIdx < 7) {
+                cell.alignment = { horizontal: (colIdx === 4 || colIdx === 6) ? 'left' : 'center' };
+            } else {
+                cell.alignment = { horizontal: 'right' };
+                if (colIdx === 7 || colIdx === 8 || colIdx === 9) cell.numFmt = '#,##0.00';
+                else if (colIdx === 10) cell.numFmt = '$#,##0.0000';
+                else if (colIdx === 11 || colIdx === 12) cell.numFmt = '$#,##0';
+
+                if (val < 0) cell.font = { ...fontStyle, color: { argb: 'FFDC2626' } };
+            }
+        });
+    });
+
+    ws2.columns = [
+        { width: 12 }, { width: 16 }, { width: 14 }, { width: 14 }, { width: 32 }, { width: 10 }, { width: 22 },
+        { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 16 }
+    ];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `盤盈虧美化分析報表_${detectedInventoryDateStr.replace(/[/]/g, '')}.xlsx`;
+    link.click();
+}
+</script>
+
+</body>
+</html>
