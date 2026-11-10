@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V11 趨勢圖抓取修復版)</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -214,7 +214,6 @@
         .col-abs-amt-pct { background-color: #dbeafe; }
 
         .text-red { color: #dc2626; }
-        .text-bold { font-weight: bold; }
 
         .filter-bar {
             display: flex;
@@ -234,39 +233,17 @@
         .export-btn {
             background-color: #2563eb;
             color: white;
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 6px;
             border: none;
             cursor: pointer;
             font-weight: 600;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             display: flex;
             align-items: center;
             gap: 6px;
-            box-shadow: 0 2px 4px rgba(37,99,235,0.2);
-            transition: all 0.2s;
         }
-        .export-btn:hover { background-color: #1d4ed8; }
 
-        .danger-btn {
-            background-color: #ef4444;
-            color: white;
-            padding: 6px 14px;
-            border-radius: 6px;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.85rem;
-        }
-        .danger-btn:hover { background-color: #dc2626; }
-
-        /* 歷史對比專用樣式 */
-        .history-list {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 16px;
-        }
         .history-chip {
             background: #e2e8f0;
             padding: 6px 14px;
@@ -321,35 +298,36 @@
 <div class="container">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次對比分析系統</h1>
-            <p>可連續上傳多期「盤盈虧彙總表」，自動產生各倉別跨期對比曲線圖與趨勢矩陣。</p>
+            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V11)</h1>
+            <p>已修復對比曲線圖抓取邏輯，確保所有倉庫盤點數值能精準連線。</p>
         </div>
         <div class="header-badges">
             <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
-            <span class="badge" style="background:#10b981;">⚡ Firebase / 本機持久儲存</span>
+            <span class="badge" style="background:#10b981;">⚡ 本機/備份數據保護</span>
         </div>
     </header>
 
-    <!-- 檔案上傳區塊 (支援一次選取多個檔案) -->
     <div class="upload-section" id="dropZone">
         <p style="margin: 0; font-size: 1rem; color: #475569;">拖曳 Excel 盤點表至此處（支援一次上傳多檔案，或多次累積上傳）</p>
         <input type="file" id="fileInput" accept=".xlsx, .xls" multiple style="display: none;">
         <button class="upload-btn" onclick="document.getElementById('fileInput').click()">選擇 Excel 檔案 (可複選)</button>
     </div>
 
-    <!-- 頁籤控制區 -->
     <div class="tabs">
         <button class="tab-btn active" onclick="switchMainTab('trend')">📈 歷次倉別趨勢圖表</button>
-        <button class="tab-btn" onclick="switchMainTab('single')">📊 單期各倉別對比 (V8版功能)</button>
+        <button class="tab-btn" onclick="switchMainTab('single')">📊 單期各倉別對比</button>
         <button class="tab-btn" onclick="switchMainTab('detail')">📋 品項盤盈虧明細查詢</button>
-        <button class="tab-btn" onclick="switchMainTab('manage')">⚙️ 歷次紀錄管理與雲端設定</button>
+        <button class="tab-btn" onclick="switchMainTab('manage')">⚙️ 歷次紀錄管理</button>
     </div>
 
     <!-- Main Tab 1: 歷次倉別趨勢圖表 -->
     <div id="trendTab" class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <h3 style="margin:0;">📉 各倉別跨期盤盈虧趨勢對比圖</h3>
-            <button class="export-btn" onclick="exportHistoryExcel()">📥 匯出歷史趨勢分析 Excel</button>
+            <div style="display:flex; gap:8px;">
+                <button class="export-btn" style="background:#64748b;" onclick="diagnoseHistoryData()">🔍 診斷目前資料結構</button>
+                <button class="export-btn" onclick="exportHistoryExcel()">📥 匯出歷史趨勢分析 Excel</button>
+            </div>
         </div>
 
         <div class="chart-controls">
@@ -376,12 +354,10 @@
             </div>
         </div>
 
-        <!-- 折線圖容器 -->
         <div style="position: relative; height:450px; width:100%; margin-bottom: 24px;">
             <canvas id="trendChartCanvas"></canvas>
         </div>
 
-        <!-- 跨期矩陣數據表 -->
         <h4 style="margin-bottom: 10px;">📊 歷次對比矩陣數據表</h4>
         <div class="table-responsive">
             <table class="sheet-table" id="historyMatrixTable">
@@ -395,22 +371,24 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- 診斷訊息視窗 -->
+        <pre id="debugOutput" style="display:none; background:#1e293b; color:#38bdf8; padding:15px; border-radius:8px; font-size:0.85rem; overflow-x:auto; margin-top:16px;"></pre>
     </div>
 
-    <!-- Main Tab 2: 單期倉別對比 (原 V8 功能) -->
+    <!-- Main Tab 2: 單期倉別對比 -->
     <div id="singleTab" class="card" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
             <div class="filter-bar" style="margin-bottom: 0;">
                 <label style="font-weight:bold;">選擇檢視期數：</label>
                 <select id="singleSessionSelect" onchange="renderSingleSession()"></select>
             </div>
-            <button class="export-btn" onclick="exportStyledExcel()">🎨 匯出該期美化 Excel 檔</button>
+            <button class="export-btn" onclick="exportStyledExcel()">🎨 匯出完整美化 Excel 檔 (含雙分頁)</button>
         </div>
 
         <div id="dateDisplayArea" class="date-badge">📅 盤點日期：<span id="inventoryDateSpan">-</span></div>
 
         <div class="layout-grid">
-            <!-- 左側：公式說明與 ALL 彙總指標表 -->
             <div>
                 <div class="formula-box">
                     <div class="formula-qty">盤盈虧數量% = 盤盈虧數量 / 庫存數量</div>
@@ -452,7 +430,6 @@
                 </table>
             </div>
 
-            <!-- 右側：主表格各倉別對比 -->
             <div class="table-responsive">
                 <table class="sheet-table" id="summaryTable">
                     <thead>
@@ -516,39 +493,26 @@
         </div>
     </div>
 
-    <!-- Main Tab 4: 歷次紀錄與 Firebase 雲端設定 -->
+    <!-- Main Tab 4: 歷次紀錄管理 -->
     <div id="manageTab" class="card" style="display: none;">
         <h3>📁 已載入之盤點期數紀錄</h3>
-        <p style="color:#64748b; font-size:0.9rem;">下表列出目前儲存在本機 / 雲端的所有盤點期別，可刪除異常或重複記錄。</p>
+        <p style="color:#64748b; font-size:0.9rem;">下表列出目前儲存在本機的所有盤點期別，可刪除異常或重複記錄。</p>
         <div class="history-list" id="historyChipsArea"></div>
-        <button class="danger-btn" onclick="clearAllHistory()">🔥 清除全歷史紀錄</button>
-
-        <hr style="margin: 24px 0; border: none; border-top: 1px solid var(--border-color);">
-
-        <h3>☁️ Firebase 雲端資料庫設定 (選填)</h3>
-        <p style="color:#64748b; font-size:0.9rem;">若需跨電腦/團隊同步數據，可在下方貼上您的 Firebase Config JSON。若未設定，系統預設自動保存在本機瀏覽器 (LocalStorage / IndexedDB)。</p>
-        
-        <div style="display:flex; flex-direction:column; gap:10px; max-width:600px;">
-            <textarea id="firebaseConfigInput" rows="5" placeholder='{\n  "apiKey": "...",\n  "authDomain": "...",\n  "databaseURL": "...",\n  "projectId": "..."\n}' style="font-family:monospace; padding:10px; border-radius:6px; border:1px solid #cbd5e1;"></textarea>
-            <button class="upload-btn" onclick="saveFirebaseConfig()" style="align-self: flex-start;">💾 儲存 Firebase 設定</button>
-        </div>
+        <button class="export-btn" style="background:#ef4444;" onclick="clearAllHistory()">🔥 清除全歷史紀錄</button>
     </div>
 </div>
 
 <script>
-// 全域資料儲存結構
 let historySessions = [];
 let selectedSessionId = null;
 let trendChartObj = null;
 
-// 標準倉庫順序
 const defaultWhOrder = [
     "綠園二廠/總倉", "綠園二廠/包材倉", "綠園二廠/待處理倉", "包裝/成品倉", "包裝/原料倉", "包裝/原料倉(包材)",
     "63-7倉", "63-6倉/上層", "63-5倉/常溫料架區", "63-7倉/待處理倉", "車棚1倉/包材倉", 
     "車棚2倉/久儲包材倉", "63-5倉/低溫倉", "63-6倉/下層/理貨倉", "理貨倉(包材)", "63-6倉/下層/直腳倉"
 ];
 
-// 色彩盤（提供給圖表使用）
 const chartColors = [
     '#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316',
     '#6366f1', '#84cc16', '#06b6d4', '#d946ef', '#64748b', '#059669', '#b91c1c', '#4338ca'
@@ -592,7 +556,7 @@ function readFileAsync(file) {
             const workbook = XLSX.read(data, { type: 'array', cellDates: true });
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
             const json = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
-            parseSheetData(json);
+            parseSheetData(json, file.name);
             resolve();
         };
         reader.readAsArrayBuffer(file);
@@ -610,7 +574,7 @@ function formatMMDD(dateStr) {
     return dateStr.replace(/[^0-9]/g, '');
 }
 
-function parseSheetData(rows) {
+function parseSheetData(rows, fileName) {
     let rawData = [];
     let headerIdx = -1;
 
@@ -622,7 +586,7 @@ function parseSheetData(rows) {
     }
 
     if (headerIdx === -1) {
-        alert('無法解析部分表格！請確認上傳檔案包含「倉庫」、「庫存數量」、「盤點數量」等欄位。');
+        alert(`無法解析檔案 ${fileName}！請確認包含「倉庫」、「庫存數量」、「盤點數量」等欄位。`);
         return;
     }
 
@@ -678,8 +642,8 @@ function parseSheetData(rows) {
     let dateFileNameSegment = "";
 
     if (sortedDates.length === 0) {
-        detectedInventoryDateStr = "未知日期";
-        dateFileNameSegment = "未定";
+        detectedInventoryDateStr = fileName.replace(/\.[^/.]+$/, "");
+        dateFileNameSegment = "自訂";
     } else if (sortedDates.length === 1) {
         detectedInventoryDateStr = sortedDates[0];
         dateFileNameSegment = formatMMDD(sortedDates[0]);
@@ -751,7 +715,7 @@ function computeWarehouseSummary(rawData) {
         totalAbsDiffAmt += Math.abs(item.diffAmt);
     });
 
-    const warehouseSummary = Object.values(whMap).filter(w => w.count > 0 || defaultWhOrder.includes(w.warehouse));
+    const warehouseSummary = Object.values(whMap);
     const overallKPI = { totalStockQty, totalCheckQty, totalDiffQty, totalAbsDiffQty, totalStockAmt, totalDiffAmt, totalAbsDiffAmt };
 
     return { warehouseSummary, overallKPI };
@@ -813,6 +777,7 @@ function selectAllWarehouses(checked) {
     renderTrendChart();
 }
 
+// 📈 核心修復：高容錯率之折線圖資料抓取邏輯
 function renderTrendChart() {
     if (historySessions.length === 0) return;
 
@@ -826,8 +791,13 @@ function renderTrendChart() {
         if (!checkedBoxes.includes(whName)) return;
 
         const dataPoints = historySessions.map(s => {
-            const item = s.warehouseSummary.find(w => w.warehouse === whName);
-            if (!item || (item.count === 0 && item.stockQty === 0)) return null;
+            // 模糊/精準兩階段匹配
+            let item = s.warehouseSummary.find(w => w.warehouse.trim() === whName.trim());
+            if (!item) {
+                item = s.warehouseSummary.find(w => w.warehouse.includes(whName) || whName.includes(w.warehouse));
+            }
+
+            if (!item || (item.count === 0 && item.stockQty === 0 && item.checkQty === 0)) return null;
 
             if (metric === 'diffAmt') return item.diffAmt;
             if (metric === 'absDiffAmt') return item.absDiffAmt;
@@ -890,7 +860,9 @@ function renderMatrixTable() {
         tr.innerHTML = `<td style="text-align:left; font-weight:bold;">${whName}</td>`;
 
         historySessions.forEach(s => {
-            const item = s.warehouseSummary.find(w => w.warehouse === whName);
+            let item = s.warehouseSummary.find(w => w.warehouse.trim() === whName.trim());
+            if (!item) item = s.warehouseSummary.find(w => w.warehouse.includes(whName) || whName.includes(w.warehouse));
+
             let valStr = "-";
             if (item && (item.count > 0 || item.stockQty > 0)) {
                 if (metric === 'diffAmt') valStr = fmtInt(item.diffAmt);
@@ -903,6 +875,20 @@ function renderMatrixTable() {
             tr.innerHTML += `<td>${valStr}</td>`;
         });
         tbody.appendChild(tr);
+    });
+}
+
+function diagnoseHistoryData() {
+    const out = document.getElementById('debugOutput');
+    out.style.display = out.style.display === 'none' ? 'block' : 'none';
+    out.innerText = "=== 歷史資料診斷訊息 ===\n";
+    out.innerText += `已載入期數: ${historySessions.length}\n`;
+    historySessions.forEach((s, i) => {
+        out.innerText += `\n[期別 ${i+1}] ID: ${s.id} | 日期: ${s.dateStr} | 明細筆數: ${s.rawData.length}\n`;
+        out.innerText += `倉別統計列表:\n`;
+        s.warehouseSummary.forEach(w => {
+            out.innerText += `  - 倉別: "${w.warehouse}" | 筆數: ${w.count} | 盤差金額: ${w.diffAmt}\n`;
+        });
     });
 }
 
@@ -1045,21 +1031,21 @@ function removeHistorySession(id) {
 function clearAllHistory() {
     if (confirm("確定要清除所有盤點歷史紀錄嗎？")) {
         historySessions = [];
-        localStorage.removeItem("inventory_history_v9");
+        localStorage.removeItem("inventory_history_v11");
         updateUI();
     }
 }
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v9", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v11", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v9");
+    const data = localStorage.getItem("inventory_history_v11");
     if (data) {
         try {
             historySessions = JSON.parse(data);
@@ -1102,11 +1088,11 @@ async function exportStyledExcel() {
     if (!session) return alert("請先選取盤點期別！");
 
     const workbook = new ExcelJS.Workbook();
-    const ws1 = workbook.addWorksheet('各倉別(理貨拆)');
-    ws1.views = [{ showGridLines: true }];
-
     const thinBorder = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     const fontStyle = { name: '微軟正黑體', size: 10 };
+
+    const ws1 = workbook.addWorksheet('各倉別(理貨拆)');
+    ws1.views = [{ showGridLines: true }];
 
     ws1.mergeCells('A1:E1');
     ws1.getCell('A1').value = '盤盈虧數量%=盤盈虧數量/庫存數量';
@@ -1139,6 +1125,32 @@ async function exportStyledExcel() {
         });
     });
 
+    const ws2 = workbook.addWorksheet('盤盈虧明細表');
+    ws2.views = [{ showGridLines: true }];
+
+    const detailHeaders = ["盤點日期", "盤點單號", "品類", "品項代號", "品項名稱", "庫存單位", "倉庫", "庫存數量", "盤點數量", "盤盈虧數量", "單位成本", "盤盈虧金額", "庫存金額"];
+    detailHeaders.forEach((h, idx) => {
+        const cell = ws2.getCell(1, idx + 1);
+        cell.value = h;
+        cell.font = { ...fontStyle, bold: true };
+        cell.border = thinBorder;
+    });
+
+    session.rawData.forEach((item, idx) => {
+        const rNum = idx + 2;
+        let displayWH = item.warehouse;
+        if (item.warehouse.includes("理貨倉") && item.code.toUpperCase().startsWith("Z")) displayWH = "理貨倉(包材)";
+        else if (item.warehouse.includes("包裝/原料倉") && item.code.toUpperCase().startsWith("Z")) displayWH = "包裝/原料倉(包材)";
+
+        const rowValues = [item.date, item.no, item.category, item.code, item.name, item.unit, displayWH, item.stockQty, item.checkQty, item.diffQty, item.cost, item.diffAmt, item.stockAmt];
+        rowValues.forEach((val, colIdx) => {
+            const cell = ws2.getCell(rNum, colIdx + 1);
+            cell.value = val;
+            cell.font = fontStyle;
+            cell.border = thinBorder;
+        });
+    });
+
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const link = document.createElement('a');
@@ -1163,7 +1175,9 @@ async function exportHistoryExcel() {
     defaultWhOrder.forEach((whName, idx) => {
         const rowVals = [whName];
         historySessions.forEach(s => {
-            const item = s.warehouseSummary.find(w => w.warehouse === whName);
+            let item = s.warehouseSummary.find(w => w.warehouse.trim() === whName.trim());
+            if (!item) item = s.warehouseSummary.find(w => w.warehouse.includes(whName) || whName.includes(w.warehouse));
+
             if (item) {
                 rowVals.push(item.diffAmt, item.absDiffAmt);
             } else {
@@ -1179,17 +1193,6 @@ async function exportHistoryExcel() {
     link.href = URL.createObjectURL(blob);
     link.download = `盤盈虧歷次對比分析總表.xlsx`;
     link.click();
-}
-
-function saveFirebaseConfig() {
-    const val = document.getElementById('firebaseConfigInput').value;
-    try {
-        JSON.parse(val);
-        localStorage.setItem("firebase_config_v9", val);
-        alert("Firebase Config 儲存成功！");
-    } catch(e) {
-        alert("請輸入正確格式的 JSON 格式！");
-    }
 }
 </script>
 
