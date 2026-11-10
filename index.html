@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與各倉別對比分析工具</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+    <!-- Chart.js for Trend Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --primary: #10b981;
             --primary-dark: #059669;
+            --secondary: #3b82f6;
             --bg-color: #f8fafc;
             --card-bg: #ffffff;
             --text-color: #1e293b;
@@ -27,27 +30,44 @@
         }
 
         .container {
-            max-width: 1600px;
+            max-width: 1650px;
             margin: 0 auto;
         }
 
         header {
-            background: linear-gradient(135deg, #1e293b, #334155);
+            background: linear-gradient(135deg, #0f172a, #334155);
             color: white;
-            padding: 20px 28px;
-            border-radius: 12px;
+            padding: 22px 30px;
+            border-radius: 14px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        header h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
-        header p { margin: 0; opacity: 0.85; font-size: 0.9rem; }
+        header h1 { margin: 0 0 6px 0; font-size: 1.65rem; }
+        header p { margin: 0; opacity: 0.85; font-size: 0.92rem; }
+
+        .header-badges {
+            display: flex;
+            gap: 10px;
+        }
+
+        .badge {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(4px);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
 
         .upload-section {
             background: var(--card-bg);
             border: 2px dashed #cbd5e1;
             border-radius: 12px;
-            padding: 24px;
+            padding: 26px;
             text-align: center;
             margin-bottom: 20px;
             transition: all 0.3s ease;
@@ -62,13 +82,14 @@
         .upload-btn {
             background-color: var(--primary);
             color: white;
-            padding: 8px 20px;
-            border-radius: 6px;
+            padding: 9px 22px;
+            border-radius: 8px;
             border: none;
             font-weight: 600;
             cursor: pointer;
             margin-top: 10px;
             display: inline-block;
+            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
         }
 
         .upload-btn:hover { background-color: var(--primary-dark); }
@@ -81,14 +102,15 @@
         }
 
         .tab-btn {
-            padding: 10px 20px;
+            padding: 12px 24px;
             border: none;
             background: none;
-            font-size: 0.95rem;
+            font-size: 0.98rem;
             font-weight: 600;
             color: #64748b;
             cursor: pointer;
-            border-radius: 6px 6px 0 0;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.2s;
         }
 
         .tab-btn.active {
@@ -101,7 +123,7 @@
             background: var(--card-bg);
             border-radius: 12px;
             border: 1px solid var(--border-color);
-            padding: 20px;
+            padding: 22px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             margin-bottom: 20px;
         }
@@ -199,10 +221,11 @@
             gap: 12px;
             margin-bottom: 16px;
             flex-wrap: wrap;
+            align-items: center;
         }
 
         .filter-bar input, .filter-bar select {
-            padding: 6px 10px;
+            padding: 6px 12px;
             border: 1px solid var(--border-color);
             border-radius: 6px;
             font-size: 0.88rem;
@@ -223,136 +246,229 @@
             box-shadow: 0 2px 4px rgba(37,99,235,0.2);
             transition: all 0.2s;
         }
+        .export-btn:hover { background-color: #1d4ed8; }
 
-        .export-btn:hover { background-color: #1d4ed8; transform: translateY(-1px); }
+        .danger-btn {
+            background-color: #ef4444;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .danger-btn:hover { background-color: #dc2626; }
+
+        /* 歷史對比專用樣式 */
+        .history-list {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .history-chip {
+            background: #e2e8f0;
+            padding: 6px 14px;
+            border-radius: 16px;
+            font-size: 0.88rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid #cbd5e1;
+        }
+        .history-chip .remove-chip {
+            cursor: pointer;
+            color: #ef4444;
+            font-weight: bold;
+        }
+
+        .chart-controls {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+            background: #f1f5f9;
+            padding: 12px 18px;
+            border-radius: 8px;
+        }
+
+        .wh-checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            max-height: 120px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            border-radius: 6px;
+            background: white;
+            width: 100%;
+        }
+
+        .wh-checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1>📦 盤盈虧彙總與各倉別對比分析工具</h1>
-        <p>上傳「盤盈虧彙總表」。</p>
+        <div>
+            <h1>📦 盤盈虧彙總與歷次對比分析系統</h1>
+            <p>可連續上傳多期「盤盈虧彙總表」，自動產生各倉別跨期對比曲線圖與趨勢矩陣。</p>
+        </div>
+        <div class="header-badges">
+            <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
+            <span class="badge" style="background:#10b981;">⚡ Firebase / 本機持久儲存</span>
+        </div>
     </header>
 
+    <!-- 檔案上傳區塊 (支援一次選取多個檔案) -->
     <div class="upload-section" id="dropZone">
-        <p style="margin: 0; font-size: 1rem; color: #475569;">拖曳 Excel 檔案至此處，或點擊下方按鈕上傳</p>
-        <input type="file" id="fileInput" accept=".xlsx, .xls" style="display: none;">
-        <button class="upload-btn" onclick="document.getElementById('fileInput').click()">選擇 Excel 檔案</button>
+        <p style="margin: 0; font-size: 1rem; color: #475569;">拖曳 Excel 盤點表至此處（支援一次上傳多檔案，或多次累積上傳）</p>
+        <input type="file" id="fileInput" accept=".xlsx, .xls" multiple style="display: none;">
+        <button class="upload-btn" onclick="document.getElementById('fileInput').click()">選擇 Excel 檔案 (可複選)</button>
     </div>
 
-    <div id="contentArea" style="display: none;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <div class="tabs" style="margin-bottom: 0;">
-                <button class="tab-btn active" onclick="switchTab('summary')">📊 各倉別對比 (含全倉包材拆分)</button>
-                <button class="tab-btn" onclick="switchTab('detail')">📋 盤盈虧明細表</button>
-            </div>
-            <button class="export-btn" onclick="exportStyledExcel()">🎨 匯出完整美化 Excel 檔 (含雙工作表)</button>
+    <!-- 頁籤控制區 -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchMainTab('trend')">📈 歷次倉別趨勢圖表</button>
+        <button class="tab-btn" onclick="switchMainTab('single')">📊 單期各倉別對比 (V8版功能)</button>
+        <button class="tab-btn" onclick="switchMainTab('detail')">📋 品項盤盈虧明細查詢</button>
+        <button class="tab-btn" onclick="switchMainTab('manage')">⚙️ 歷次紀錄管理與雲端設定</button>
+    </div>
+
+    <!-- Main Tab 1: 歷次倉別趨勢圖表 -->
+    <div id="trendTab" class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin:0;">📉 各倉別跨期盤盈虧趨勢對比圖</h3>
+            <button class="export-btn" onclick="exportHistoryExcel()">📥 匯出歷史趨勢分析 Excel</button>
         </div>
 
-        <!-- Tab 1: 各倉別對比 -->
-        <div id="summaryTab" class="card">
-            <div id="dateDisplayArea" class="date-badge">📅 盤點日期：<span id="inventoryDateSpan">-</span></div>
-            
-            <div class="layout-grid">
-                <!-- 左側：公式說明與 ALL 彙總指標表 -->
-                <div>
-                    <div class="formula-box">
-                        <div class="formula-qty">盤盈虧數量% = 盤盈虧數量 / 庫存數量</div>
-                        <div class="formula-amt">盤盈虧金額差異% = 盤盈虧金額 / 庫存金額</div>
-                    </div>
-
-                    <table class="excel-box all-kpi-table">
-                        <thead>
-                            <tr>
-                                <th rowspan="2" style="font-size:1.1rem; width:50px;">A L L</th>
-                                <th>盤盈虧數量%</th>
-                                <th>盤盈虧數量絕對值%</th>
-                                <th>盤盈虧金額%</th>
-                                <th>盤盈虧金額(絕對值)%</th>
-                            </tr>
-                            <tr>
-                                <td id="kpiDiffQtyPct">0.000%</td>
-                                <td id="kpiAbsDiffQtyPct">0.000%</td>
-                                <td id="kpiDiffAmtPct">0.000%</td>
-                                <td id="kpiAbsDiffAmtPct">0.000%</td>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr class="target-row">
-                                <td>目標</td>
-                                <td>±0.2%</td>
-                                <td></td>
-                                <td>±20000</td>
-                                <td></td>
-                            </tr>
-                            <tr>
-                                <td></td>
-                                <td></td>
-                                <td></td>
-                                <td id="kpiDiffAmtVal" class="text-red">-</td>
-                                <td id="kpiAbsDiffAmtVal">0</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- 右側：主表格各倉別對比 -->
-                <div class="table-responsive">
-                    <table class="sheet-table" id="summaryTable">
-                        <thead>
-                            <tr>
-                                <th>ＡＬＬ</th>
-                                <th>庫存數量</th>
-                                <th>盤點數量</th>
-                                <th>盤盈虧數量</th>
-                                <th>盤盈虧金額</th>
-                                <th>庫存金額</th>
-                                <th class="col-abs-qty">盤盈虧數量<br>(絕對值)</th>
-                                <th class="col-qty-pct">盤盈虧數量%</th>
-                                <th class="col-abs-qty-pct">盤盈虧數量<br>(絕對值)%</th>
-                                <th class="col-abs-amt">盤盈虧金額<br>(絕對值)</th>
-                                <th class="col-amt-pct">盤盈虧金額<br>差異%</th>
-                                <th class="col-abs-amt-pct">盤盈虧金額差異<br>(絕對值)%</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+        <div class="chart-controls">
+            <div>
+                <label style="font-weight: bold; font-size: 0.9rem;">對比指標：</label>
+                <select id="metricSelect" onchange="renderTrendChart()">
+                    <option value="diffAmt">盤盈虧金額 ($)</option>
+                    <option value="absDiffAmt" selected>盤盈虧金額(絕對值) ($)</option>
+                    <option value="diffQty">盤盈虧數量</option>
+                    <option value="absDiffQty">盤盈虧數量(絕對值)</option>
+                    <option value="amtPct">盤盈虧金額差異%</option>
+                    <option value="absAmtPct">盤盈虧金額差異(絕對值)%</option>
+                </select>
+            </div>
+            <div>
+                <button class="upload-btn" style="padding:4px 12px; font-size:0.85rem;" onclick="selectAllWarehouses(true)">全選倉庫</button>
+                <button class="upload-btn" style="padding:4px 12px; font-size:0.85rem; background:#64748b;" onclick="selectAllWarehouses(false)">全不選</button>
+            </div>
+            <div style="width: 100%;">
+                <label style="font-weight: bold; font-size: 0.85rem; display:block; margin-bottom:4px;">勾選欲顯示的倉庫：</label>
+                <div class="wh-checkbox-group" id="whCheckboxContainer">
+                    <span style="color:#94a3b8; font-size:0.85rem;">請先上傳 Excel 盤點表資料...</span>
                 </div>
             </div>
         </div>
 
-        <!-- Tab 2: 明細篩選 -->
-        <div id="detailTab" class="card" style="display: none;">
-            <div class="filter-bar">
-                <input type="text" id="searchInput" placeholder="搜尋品項名稱/代號..." oninput="renderDetailTable()">
-                <select id="warehouseFilter" onchange="renderDetailTable()">
-                    <option value="">全部倉庫</option>
-                </select>
-                <select id="diffFilter" onchange="renderDetailTable()">
-                    <option value="all">全部分項</option>
-                    <option value="diff">僅顯示有盤盈虧 (≠0)</option>
-                    <option value="plus">僅顯示盤盈 (>0)</option>
-                    <option value="minus">僅顯示盤虧 (<0)</option>
-                </select>
+        <!-- 折線圖容器 -->
+        <div style="position: relative; height:450px; width:100%; margin-bottom: 24px;">
+            <canvas id="trendChartCanvas"></canvas>
+        </div>
+
+        <!-- 跨期矩陣數據表 -->
+        <h4 style="margin-bottom: 10px;">📊 歷次對比矩陣數據表</h4>
+        <div class="table-responsive">
+            <table class="sheet-table" id="historyMatrixTable">
+                <thead>
+                    <tr id="matrixTableHeader">
+                        <th>倉庫名稱</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="5" style="text-align:center; color:#94a3b8;">尚無歷史盤點資料</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Main Tab 2: 單期倉別對比 (原 V8 功能) -->
+    <div id="singleTab" class="card" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <div class="filter-bar" style="margin-bottom: 0;">
+                <label style="font-weight:bold;">選擇檢視期數：</label>
+                <select id="singleSessionSelect" onchange="renderSingleSession()"></select>
             </div>
-            <div class="table-responsive">
-                <table class="sheet-table" id="detailTable">
+            <button class="export-btn" onclick="exportStyledExcel()">🎨 匯出該期美化 Excel 檔</button>
+        </div>
+
+        <div id="dateDisplayArea" class="date-badge">📅 盤點日期：<span id="inventoryDateSpan">-</span></div>
+
+        <div class="layout-grid">
+            <!-- 左側：公式說明與 ALL 彙總指標表 -->
+            <div>
+                <div class="formula-box">
+                    <div class="formula-qty">盤盈虧數量% = 盤盈虧數量 / 庫存數量</div>
+                    <div class="formula-amt">盤盈虧金額差異% = 盤盈虧金額 / 庫存金額</div>
+                </div>
+
+                <table class="excel-box all-kpi-table">
                     <thead>
                         <tr>
-                            <th>盤點日期</th>
-                            <th>盤點單號</th>
-                            <th>品類</th>
-                            <th>品項代號</th>
-                            <th>品項名稱</th>
-                            <th>單位</th>
-                            <th>倉庫</th>
+                            <th rowspan="2" style="font-size:1.1rem; width:50px;">A L L</th>
+                            <th>盤盈虧數量%</th>
+                            <th>盤盈虧數量絕對值%</th>
+                            <th>盤盈虧金額%</th>
+                            <th>盤盈虧金額(絕對值)%</th>
+                        </tr>
+                        <tr>
+                            <td id="kpiDiffQtyPct">0.000%</td>
+                            <td id="kpiAbsDiffQtyPct">0.000%</td>
+                            <td id="kpiDiffAmtPct">0.000%</td>
+                            <td id="kpiAbsDiffAmtPct">0.000%</td>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="target-row">
+                            <td>目標</td>
+                            <td>±0.2%</td>
+                            <td></td>
+                            <td>±20000</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td id="kpiDiffAmtVal" class="text-red">-</td>
+                            <td id="kpiAbsDiffAmtVal">0</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 右側：主表格各倉別對比 -->
+            <div class="table-responsive">
+                <table class="sheet-table" id="summaryTable">
+                    <thead>
+                        <tr>
+                            <th>ＡＬＬ</th>
                             <th>庫存數量</th>
                             <th>盤點數量</th>
                             <th>盤盈虧數量</th>
-                            <th>單位成本</th>
                             <th>盤盈虧金額</th>
                             <th>庫存金額</th>
+                            <th class="col-abs-qty">盤盈虧數量<br>(絕對值)</th>
+                            <th class="col-qty-pct">盤盈虧數量%</th>
+                            <th class="col-abs-qty-pct">盤盈虧數量<br>(絕對值)%</th>
+                            <th class="col-abs-amt">盤盈虧金額<br>(絕對值)</th>
+                            <th class="col-amt-pct">盤盈虧金額<br>差異%</th>
+                            <th class="col-abs-amt-pct">盤盈虧金額差異<br>(絕對值)%</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -360,14 +476,83 @@
             </div>
         </div>
     </div>
+
+    <!-- Main Tab 3: 明細篩選 -->
+    <div id="detailTab" class="card" style="display: none;">
+        <div class="filter-bar">
+            <select id="detailSessionSelect" onchange="renderDetailTable()"></select>
+            <input type="text" id="searchInput" placeholder="搜尋品項名稱/代號..." oninput="renderDetailTable()">
+            <select id="warehouseFilter" onchange="renderDetailTable()">
+                <option value="">全部倉庫</option>
+            </select>
+            <select id="diffFilter" onchange="renderDetailTable()">
+                <option value="all">全部分項</option>
+                <option value="diff">僅顯示有盤盈虧 (≠0)</option>
+                <option value="plus">僅顯示盤盈 (>0)</option>
+                <option value="minus">僅顯示盤虧 (<0)</option>
+            </select>
+        </div>
+        <div class="table-responsive">
+            <table class="sheet-table" id="detailTable">
+                <thead>
+                    <tr>
+                        <th>盤點日期</th>
+                        <th>盤點單號</th>
+                        <th>品類</th>
+                        <th>品項代號</th>
+                        <th>品項名稱</th>
+                        <th>單位</th>
+                        <th>倉庫</th>
+                        <th>庫存數量</th>
+                        <th>盤點數量</th>
+                        <th>盤盈虧數量</th>
+                        <th>單位成本</th>
+                        <th>盤盈虧金額</th>
+                        <th>庫存金額</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Main Tab 4: 歷次紀錄與 Firebase 雲端設定 -->
+    <div id="manageTab" class="card" style="display: none;">
+        <h3>📁 已載入之盤點期數紀錄</h3>
+        <p style="color:#64748b; font-size:0.9rem;">下表列出目前儲存在本機 / 雲端的所有盤點期別，可刪除異常或重複記錄。</p>
+        <div class="history-list" id="historyChipsArea"></div>
+        <button class="danger-btn" onclick="clearAllHistory()">🔥 清除全歷史紀錄</button>
+
+        <hr style="margin: 24px 0; border: none; border-top: 1px solid var(--border-color);">
+
+        <h3>☁️ Firebase 雲端資料庫設定 (選填)</h3>
+        <p style="color:#64748b; font-size:0.9rem;">若需跨電腦/團隊同步數據，可在下方貼上您的 Firebase Config JSON。若未設定，系統預設自動保存在本機瀏覽器 (LocalStorage / IndexedDB)。</p>
+        
+        <div style="display:flex; flex-direction:column; gap:10px; max-width:600px;">
+            <textarea id="firebaseConfigInput" rows="5" placeholder='{\n  "apiKey": "...",\n  "authDomain": "...",\n  "databaseURL": "...",\n  "projectId": "..."\n}' style="font-family:monospace; padding:10px; border-radius:6px; border:1px solid #cbd5e1;"></textarea>
+            <button class="upload-btn" onclick="saveFirebaseConfig()" style="align-self: flex-start;">💾 儲存 Firebase 設定</button>
+        </div>
+    </div>
 </div>
 
 <script>
-let rawData = [];
-let warehouseSummary = [];
-let overallKPI = {};
-let detectedInventoryDateStr = "";
-let dateFileNameSegment = "";
+// 全域資料儲存結構
+let historySessions = [];
+let selectedSessionId = null;
+let trendChartObj = null;
+
+// 標準倉庫順序
+const defaultWhOrder = [
+    "綠園二廠/總倉", "綠園二廠/包材倉", "綠園二廠/待處理倉", "包裝/成品倉", "包裝/原料倉", "包裝/原料倉(包材)",
+    "63-7倉", "63-6倉/上層", "63-5倉/常溫料架區", "63-7倉/待處理倉", "車棚1倉/包材倉", 
+    "車棚2倉/久儲包材倉", "63-5倉/低溫倉", "63-6倉/下層/理貨倉", "理貨倉(包材)", "63-6倉/下層/直腳倉"
+];
+
+// 色彩盤（提供給圖表使用）
+const chartColors = [
+    '#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316',
+    '#6366f1', '#84cc16', '#06b6d4', '#d946ef', '#64748b', '#059669', '#b91c1c', '#4338ca'
+];
 
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -377,26 +562,43 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover
 dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropZone.classList.remove('dragover');
-    if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
 });
 
 fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) handleFile(e.target.files[0]);
+    if (e.target.files.length > 0) handleFiles(e.target.files);
 });
 
-function handleFile(file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
-        parseSheetData(json);
-    };
-    reader.readAsArrayBuffer(file);
+window.addEventListener('DOMContentLoaded', () => {
+    loadLocalHistory();
+});
+
+function handleFiles(files) {
+    let promises = [];
+    for (let i = 0; i < files.length; i++) {
+        promises.push(readFileAsync(files[i]));
+    }
+    Promise.all(promises).then(() => {
+        saveLocalHistory();
+        updateUI();
+    });
 }
 
-// 轉換日期為 MMDD 格式（例：2026/03/14 -> 0314）
+function readFileAsync(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+            parseSheetData(json);
+            resolve();
+        };
+        reader.readAsArrayBuffer(file);
+    });
+}
+
 function formatMMDD(dateStr) {
     if (!dateStr) return "";
     const parts = dateStr.split(/[/.-]/);
@@ -409,7 +611,7 @@ function formatMMDD(dateStr) {
 }
 
 function parseSheetData(rows) {
-    rawData = [];
+    let rawData = [];
     let headerIdx = -1;
 
     for (let i = 0; i < Math.min(rows.length, 10); i++) {
@@ -420,7 +622,7 @@ function parseSheetData(rows) {
     }
 
     if (headerIdx === -1) {
-        alert('無法解析表頭！請確認上傳檔案包含「倉庫」、「庫存數量」、「盤點數量」等欄位。');
+        alert('無法解析部分表格！請確認上傳檔案包含「倉庫」、「庫存數量」、「盤點數量」等欄位。');
         return;
     }
 
@@ -472,32 +674,46 @@ function parseSheetData(rows) {
     }
 
     const sortedDates = Array.from(dateSet).sort();
+    let detectedInventoryDateStr = "";
+    let dateFileNameSegment = "";
+
     if (sortedDates.length === 0) {
-        detectedInventoryDateStr = "未填寫";
-        dateFileNameSegment = "";
+        detectedInventoryDateStr = "未知日期";
+        dateFileNameSegment = "未定";
     } else if (sortedDates.length === 1) {
         detectedInventoryDateStr = sortedDates[0];
         dateFileNameSegment = formatMMDD(sortedDates[0]);
     } else {
-        detectedInventoryDateStr = `${sortedDates[0]} ~ ${sortedDates[sortedDates.length - 1]} (共 ${sortedDates.length} 天)`;
+        detectedInventoryDateStr = `${sortedDates[0]} ~ ${sortedDates[sortedDates.length - 1]}`;
         const startMMDD = formatMMDD(sortedDates[0]);
         const endMMDD = formatMMDD(sortedDates[sortedDates.length - 1]);
         dateFileNameSegment = `${startMMDD}_${endMMDD}`;
     }
 
-    processSummary();
-    document.getElementById('contentArea').style.display = 'block';
+    const summaryRes = computeWarehouseSummary(rawData);
+    const existingIdx = historySessions.findIndex(s => s.dateStr === detectedInventoryDateStr);
+    const sessionObj = {
+        id: existingIdx !== -1 ? historySessions[existingIdx].id : 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2,4),
+        dateStr: detectedInventoryDateStr,
+        fileNameSeg: dateFileNameSegment,
+        rawData: rawData,
+        warehouseSummary: summaryRes.warehouseSummary,
+        overallKPI: summaryRes.overallKPI
+    };
+
+    if (existingIdx !== -1) {
+        historySessions[existingIdx] = sessionObj;
+    } else {
+        historySessions.push(sessionObj);
+    }
+
+    historySessions.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+    selectedSessionId = sessionObj.id;
 }
 
-function processSummary() {
-    const whOrder = [
-        "綠園二廠/總倉", "綠園二廠/包材倉", "綠園二廠/待處理倉", "包裝/成品倉", "包裝/原料倉", "包裝/原料倉(包材)",
-        "63-7倉", "63-6倉/上層", "63-5倉/常溫料架區", "63-7倉/待處理倉", "車棚1倉/包材倉", 
-        "車棚2倉/久儲包材倉", "63-5倉/低溫倉", "63-6倉/下層/理貨倉", "理貨倉(包材)", "63-6倉/下層/直腳倉"
-    ];
-
+function computeWarehouseSummary(rawData) {
     const whMap = {};
-    whOrder.forEach(name => {
+    defaultWhOrder.forEach(name => {
         whMap[name] = { warehouse: name, stockQty: 0, checkQty: 0, diffQty: 0, absDiffQty: 0, stockAmt: 0, diffAmt: 0, absDiffAmt: 0, count: 0 };
     });
 
@@ -535,66 +751,190 @@ function processSummary() {
         totalAbsDiffAmt += Math.abs(item.diffAmt);
     });
 
-    warehouseSummary = Object.values(whMap).filter(w => w.count > 0 || whOrder.includes(w.warehouse));
+    const warehouseSummary = Object.values(whMap).filter(w => w.count > 0 || defaultWhOrder.includes(w.warehouse));
+    const overallKPI = { totalStockQty, totalCheckQty, totalDiffQty, totalAbsDiffQty, totalStockAmt, totalDiffAmt, totalAbsDiffAmt };
 
-    overallKPI = {
-        totalStockQty, totalCheckQty, totalDiffQty, totalAbsDiffQty,
-        totalStockAmt, totalDiffAmt, totalAbsDiffAmt
-    };
-
-    document.getElementById('inventoryDateSpan').innerText = detectedInventoryDateStr;
-
-    renderKPI();
-    renderSummaryTable();
-    populateWarehouseFilter();
-    renderDetailTable();
+    return { warehouseSummary, overallKPI };
 }
 
-function fmtNum(val, decimals = 2) {
-    if (val === 0) return '0.00';
-    return val.toLocaleString('zh-TW', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+function updateUI() {
+    document.getElementById('sessionCountBadge').innerText = `已載入期數：${historySessions.length} 期`;
+
+    if (historySessions.length === 0) {
+        document.getElementById('whCheckboxContainer').innerHTML = '<span style="color:#94a3b8; font-size:0.85rem;">尚無歷史資料，請先上傳 Excel...</span>';
+        return;
+    }
+
+    updateDropdowns();
+    initWarehouseCheckboxes();
+    renderTrendChart();
+    renderMatrixTable();
+    renderSingleSession();
+    renderHistoryChips();
 }
 
-function fmtInt(val) {
-    return Math.round(val).toLocaleString('zh-TW');
+function updateDropdowns() {
+    const singleSelect = document.getElementById('singleSessionSelect');
+    const detailSelect = document.getElementById('detailSessionSelect');
+
+    singleSelect.innerHTML = '';
+    detailSelect.innerHTML = '';
+
+    historySessions.forEach(s => {
+        const opt1 = document.createElement('option');
+        opt1.value = s.id;
+        opt1.textContent = `📅 盤點期別：${s.dateStr}`;
+        if (s.id === selectedSessionId) opt1.selected = true;
+        singleSelect.appendChild(opt1);
+
+        const opt2 = document.createElement('option');
+        opt2.value = s.id;
+        opt2.textContent = `📅 明細期別：${s.dateStr}`;
+        if (s.id === selectedSessionId) opt2.selected = true;
+        detailSelect.appendChild(opt2);
+    });
 }
 
-function fmtPct(val) {
-    if (!val) return '0.00%';
-    return (val * 100).toFixed(2) + '%';
+function initWarehouseCheckboxes() {
+    const container = document.getElementById('whCheckboxContainer');
+    container.innerHTML = '';
+
+    defaultWhOrder.forEach((whName, idx) => {
+        const label = document.createElement('label');
+        label.className = 'wh-checkbox-item';
+        label.innerHTML = `<input type="checkbox" value="${whName}" checked onchange="renderTrendChart()"> <span style="color:${chartColors[idx % chartColors.length]}; font-weight:bold;">■</span> ${whName}`;
+        container.appendChild(label);
+    });
 }
 
-function fmtPct3(val) {
-    if (!val) return '0.000%';
-    return (val * 100).toFixed(3) + '%';
+function selectAllWarehouses(checked) {
+    const checkboxes = document.querySelectorAll('#whCheckboxContainer input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = checked);
+    renderTrendChart();
 }
 
-function renderKPI() {
-    const qtyPct = overallKPI.totalStockQty ? overallKPI.totalDiffQty / overallKPI.totalStockQty : 0;
-    const absQtyPct = overallKPI.totalStockQty ? overallKPI.totalAbsDiffQty / overallKPI.totalStockQty : 0;
-    const amtPct = overallKPI.totalStockAmt ? overallKPI.totalDiffAmt / overallKPI.totalStockAmt : 0;
-    const absAmtPct = overallKPI.totalStockAmt ? overallKPI.totalAbsDiffAmt / overallKPI.totalStockAmt : 0;
+function renderTrendChart() {
+    if (historySessions.length === 0) return;
+
+    const metric = document.getElementById('metricSelect').value;
+    const checkedBoxes = Array.from(document.querySelectorAll('#whCheckboxContainer input[type="checkbox"]:checked')).map(cb => cb.value);
+
+    const labels = historySessions.map(s => s.dateStr);
+    const datasets = [];
+
+    defaultWhOrder.forEach((whName, idx) => {
+        if (!checkedBoxes.includes(whName)) return;
+
+        const dataPoints = historySessions.map(s => {
+            const item = s.warehouseSummary.find(w => w.warehouse === whName);
+            if (!item || (item.count === 0 && item.stockQty === 0)) return null;
+
+            if (metric === 'diffAmt') return item.diffAmt;
+            if (metric === 'absDiffAmt') return item.absDiffAmt;
+            if (metric === 'diffQty') return item.diffQty;
+            if (metric === 'absDiffQty') return item.absDiffQty;
+            if (metric === 'amtPct') return item.stockAmt ? (item.diffAmt / item.stockAmt) * 100 : 0;
+            if (metric === 'absAmtPct') return item.stockAmt ? (item.absDiffAmt / item.stockAmt) * 100 : 0;
+            return 0;
+        });
+
+        datasets.push({
+            label: whName,
+            data: dataPoints,
+            borderColor: chartColors[idx % chartColors.length],
+            backgroundColor: chartColors[idx % chartColors.length],
+            fill: false,
+            tension: 0.15,
+            borderWidth: 2,
+            pointRadius: 4
+        });
+    });
+
+    const ctx = document.getElementById('trendChartCanvas').getContext('2d');
+    if (trendChartObj) trendChartObj.destroy();
+
+    trendChartObj = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                tooltip: { mode: 'index', intersect: false },
+                legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } }
+            },
+            scales: {
+                x: { title: { display: true, text: '盤點日期梯次' } },
+                y: { title: { display: true, text: '數值' } }
+            }
+        }
+    });
+}
+
+function renderMatrixTable() {
+    const headerTr = document.getElementById('matrixTableHeader');
+    const tbody = document.querySelector('#historyMatrixTable tbody');
+
+    headerTr.innerHTML = '<th>倉庫名稱</th>';
+    historySessions.forEach(s => {
+        const th = document.createElement('th');
+        th.innerText = s.dateStr;
+        headerTr.appendChild(th);
+    });
+
+    tbody.innerHTML = '';
+    const metric = document.getElementById('metricSelect').value;
+
+    defaultWhOrder.forEach(whName => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left; font-weight:bold;">${whName}</td>`;
+
+        historySessions.forEach(s => {
+            const item = s.warehouseSummary.find(w => w.warehouse === whName);
+            let valStr = "-";
+            if (item && (item.count > 0 || item.stockQty > 0)) {
+                if (metric === 'diffAmt') valStr = fmtInt(item.diffAmt);
+                else if (metric === 'absDiffAmt') valStr = fmtInt(item.absDiffAmt);
+                else if (metric === 'diffQty') valStr = fmtNum(item.diffQty);
+                else if (metric === 'absDiffQty') valStr = fmtNum(item.absDiffQty);
+                else if (metric === 'amtPct') valStr = fmtPct(item.stockAmt ? item.diffAmt / item.stockAmt : 0);
+                else if (metric === 'absAmtPct') valStr = fmtPct(item.stockAmt ? item.absDiffAmt / item.stockAmt : 0);
+            }
+            tr.innerHTML += `<td>${valStr}</td>`;
+        });
+        tbody.appendChild(tr);
+    });
+}
+
+function renderSingleSession() {
+    const selId = document.getElementById('singleSessionSelect').value || selectedSessionId;
+    const session = historySessions.find(s => s.id === selId);
+    if (!session) return;
+
+    document.getElementById('inventoryDateSpan').innerText = session.dateStr;
+
+    const kpi = session.overallKPI;
+    const qtyPct = kpi.totalStockQty ? kpi.totalDiffQty / kpi.totalStockQty : 0;
+    const absQtyPct = kpi.totalStockQty ? kpi.totalAbsDiffQty / kpi.totalStockQty : 0;
+    const amtPct = kpi.totalStockAmt ? kpi.totalDiffAmt / kpi.totalStockAmt : 0;
+    const absAmtPct = kpi.totalStockAmt ? kpi.totalAbsDiffAmt / kpi.totalStockAmt : 0;
 
     document.getElementById('kpiDiffQtyPct').innerText = fmtPct3(qtyPct);
     document.getElementById('kpiAbsDiffQtyPct').innerText = fmtPct3(absQtyPct);
     document.getElementById('kpiDiffAmtPct').innerText = fmtPct3(amtPct);
     document.getElementById('kpiAbsDiffAmtPct').innerText = fmtPct3(absAmtPct);
+    document.getElementById('kpiDiffAmtVal').innerText = '- ' + fmtInt(Math.abs(kpi.totalDiffAmt));
+    document.getElementById('kpiAbsDiffAmtVal').innerText = fmtInt(kpi.totalAbsDiffAmt);
 
-    document.getElementById('kpiDiffAmtVal').innerText = '- ' + fmtInt(Math.abs(overallKPI.totalDiffAmt));
-    document.getElementById('kpiAbsDiffAmtVal').innerText = fmtInt(overallKPI.totalAbsDiffAmt);
-}
-
-function renderSummaryTable() {
     const tbody = document.querySelector('#summaryTable tbody');
     tbody.innerHTML = '';
 
-    warehouseSummary.forEach(row => {
+    session.warehouseSummary.forEach(row => {
         const isNoCheck = row.count === 0 && row.stockQty === 0;
-
-        const qtyPct = row.stockQty ? row.diffQty / row.stockQty : 0;
-        const absQtyPct = row.stockQty ? row.absDiffQty / row.stockQty : 0;
-        const amtPct = row.stockAmt ? row.diffAmt / row.stockAmt : 0;
-        const absAmtPct = row.stockAmt ? row.absDiffAmt / row.stockAmt : 0;
+        const qPct = row.stockQty ? row.diffQty / row.stockQty : 0;
+        const absQPct = row.stockQty ? row.absDiffQty / row.stockQty : 0;
+        const aPct = row.stockAmt ? row.diffAmt / row.stockAmt : 0;
+        const absAPct = row.stockAmt ? row.absDiffAmt / row.stockAmt : 0;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -605,20 +945,24 @@ function renderSummaryTable() {
             <td class="${row.diffAmt < 0 ? 'text-red' : ''}">${fmtNum(row.diffAmt)}</td>
             <td>${fmtInt(row.stockAmt)}</td>
             <td class="col-abs-qty">${fmtNum(row.absDiffQty)}</td>
-            <td class="col-qty-pct">${isNoCheck ? '無盤點' : fmtPct(qtyPct)}</td>
-            <td class="col-abs-qty-pct">${isNoCheck ? '無盤點' : fmtPct(absQtyPct)}</td>
+            <td class="col-qty-pct">${isNoCheck ? '無盤點' : fmtPct(qPct)}</td>
+            <td class="col-abs-qty-pct">${isNoCheck ? '無盤點' : fmtPct(absQPct)}</td>
             <td class="col-abs-amt">${fmtInt(row.absDiffAmt)}</td>
-            <td class="col-amt-pct">${isNoCheck ? '無盤點' : fmtPct(amtPct)}</td>
-            <td class="col-abs-amt-pct">${isNoCheck ? '無盤點' : fmtPct(absAmtPct)}</td>
+            <td class="col-amt-pct">${isNoCheck ? '無盤點' : fmtPct(aPct)}</td>
+            <td class="col-abs-amt-pct">${isNoCheck ? '無盤點' : fmtPct(absAPct)}</td>
         `;
         tbody.appendChild(tr);
     });
+
+    populateWarehouseFilter(session);
+    renderDetailTable();
 }
 
-function populateWarehouseFilter() {
+function populateWarehouseFilter(session) {
     const select = document.getElementById('warehouseFilter');
     select.innerHTML = '<option value="">全部倉庫</option>';
-    warehouseSummary.forEach(w => {
+    if (!session) return;
+    session.warehouseSummary.forEach(w => {
         if (w.count > 0) {
             const opt = document.createElement('option');
             opt.value = w.warehouse;
@@ -629,6 +973,10 @@ function populateWarehouseFilter() {
 }
 
 function renderDetailTable() {
+    const selId = document.getElementById('detailSessionSelect').value || selectedSessionId;
+    const session = historySessions.find(s => s.id === selId);
+    if (!session) return;
+
     const search = document.getElementById('searchInput').value.toLowerCase();
     const whFilter = document.getElementById('warehouseFilter').value;
     const diffFilter = document.getElementById('diffFilter').value;
@@ -636,13 +984,10 @@ function renderDetailTable() {
     const tbody = document.querySelector('#detailTable tbody');
     tbody.innerHTML = '';
 
-    const filtered = rawData.filter(item => {
+    const filtered = session.rawData.filter(item => {
         let currentWH = item.warehouse;
-        if (item.warehouse.includes("理貨倉") && item.code.toUpperCase().startsWith("Z")) {
-            currentWH = "理貨倉(包材)";
-        } else if (item.warehouse.includes("包裝/原料倉") && item.code.toUpperCase().startsWith("Z")) {
-            currentWH = "包裝/原料倉(包材)";
-        }
+        if (item.warehouse.includes("理貨倉") && item.code.toUpperCase().startsWith("Z")) currentWH = "理貨倉(包材)";
+        else if (item.warehouse.includes("包裝/原料倉") && item.code.toUpperCase().startsWith("Z")) currentWH = "包裝/原料倉(包材)";
 
         const matchSearch = item.name.toLowerCase().includes(search) || item.code.toLowerCase().includes(search);
         const matchWH = !whFilter || currentWH === whFilter || item.warehouse === whFilter;
@@ -657,11 +1002,8 @@ function renderDetailTable() {
 
     filtered.forEach(item => {
         let displayWH = item.warehouse;
-        if (item.warehouse.includes("理貨倉") && item.code.toUpperCase().startsWith("Z")) {
-            displayWH = "理貨倉(包材)";
-        } else if (item.warehouse.includes("包裝/原料倉") && item.code.toUpperCase().startsWith("Z")) {
-            displayWH = "包裝/原料倉(包材)";
-        }
+        if (item.warehouse.includes("理貨倉") && item.code.toUpperCase().startsWith("Z")) displayWH = "理貨倉(包材)";
+        else if (item.warehouse.includes("包裝/原料倉") && item.code.toUpperCase().startsWith("Z")) displayWH = "包裝/原料倉(包材)";
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -683,242 +1025,171 @@ function renderDetailTable() {
     });
 }
 
-function switchTab(tab) {
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    if (tab === 'summary') {
-        document.querySelectorAll('.tab-btn')[0].classList.add('active');
-        document.getElementById('summaryTab').style.display = 'block';
-        document.getElementById('detailTab').style.display = 'none';
-    } else {
-        document.querySelectorAll('.tab-btn')[1].classList.add('active');
-        document.getElementById('summaryTab').style.display = 'none';
-        document.getElementById('detailTab').style.display = 'block';
+function renderHistoryChips() {
+    const container = document.getElementById('historyChipsArea');
+    container.innerHTML = '';
+    historySessions.forEach((s, idx) => {
+        const div = document.createElement('div');
+        div.className = 'history-chip';
+        div.innerHTML = `📅 期別 ${idx + 1}: <strong>${s.dateStr}</strong> (${s.rawData.length}筆) <span class="remove-chip" onclick="removeHistorySession('${s.id}')">✕</span>`;
+        container.appendChild(div);
+    });
+}
+
+function removeHistorySession(id) {
+    historySessions = historySessions.filter(s => s.id !== id);
+    saveLocalHistory();
+    updateUI();
+}
+
+function clearAllHistory() {
+    if (confirm("確定要清除所有盤點歷史紀錄嗎？")) {
+        historySessions = [];
+        localStorage.removeItem("inventory_history_v9");
+        updateUI();
     }
 }
 
-// 🎨 使用 ExcelJS 生成完整美化 Excel 檔 (含雙工作表)
+function saveLocalHistory() {
+    try {
+        localStorage.setItem("inventory_history_v9", JSON.stringify(historySessions));
+    } catch(e) {
+        console.warn("LocalStorage 儲存上限警告", e);
+    }
+}
+
+function loadLocalHistory() {
+    const data = localStorage.getItem("inventory_history_v9");
+    if (data) {
+        try {
+            historySessions = JSON.parse(data);
+            if (historySessions.length > 0) selectedSessionId = historySessions[0].id;
+            updateUI();
+        } catch(e) { console.error(e); }
+    }
+}
+
+function fmtNum(val, decimals = 2) { return val === 0 ? '0.00' : val.toLocaleString('zh-TW', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }); }
+function fmtInt(val) { return Math.round(val).toLocaleString('zh-TW'); }
+function fmtPct(val) { return !val ? '0.00%' : (val * 100).toFixed(2) + '%'; }
+function fmtPct3(val) { return !val ? '0.000%' : (val * 100).toFixed(3) + '%'; }
+
+function switchMainTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('trendTab').style.display = 'none';
+    document.getElementById('singleTab').style.display = 'none';
+    document.getElementById('detailTab').style.display = 'none';
+    document.getElementById('manageTab').style.display = 'none';
+
+    if (tabName === 'trend') {
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        document.getElementById('trendTab').style.display = 'block';
+    } else if (tabName === 'single') {
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        document.getElementById('singleTab').style.display = 'block';
+    } else if (tabName === 'detail') {
+        document.querySelectorAll('.tab-btn')[2].classList.add('active');
+        document.getElementById('detailTab').style.display = 'block';
+    } else if (tabName === 'manage') {
+        document.querySelectorAll('.tab-btn')[3].classList.add('active');
+        document.getElementById('manageTab').style.display = 'block';
+    }
+}
+
 async function exportStyledExcel() {
+    const selId = document.getElementById('singleSessionSelect').value || selectedSessionId;
+    const session = historySessions.find(s => s.id === selId);
+    if (!session) return alert("請先選取盤點期別！");
+
     const workbook = new ExcelJS.Workbook();
-    
-    // -------------------------------------------------------------
-    // Sheet 1: 各倉別(理貨拆)
-    // -------------------------------------------------------------
     const ws1 = workbook.addWorksheet('各倉別(理貨拆)');
     ws1.views = [{ showGridLines: true }];
 
-    const thinBorder = {
-        top: { style: 'thin', color: { argb: 'FF64748B' } },
-        left: { style: 'thin', color: { argb: 'FF64748B' } },
-        bottom: { style: 'thin', color: { argb: 'FF64748B' } },
-        right: { style: 'thin', color: { argb: 'FF64748B' } }
-    };
-
+    const thinBorder = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     const fontStyle = { name: '微軟正黑體', size: 10 };
 
-    // 公式說明
     ws1.mergeCells('A1:E1');
     ws1.getCell('A1').value = '盤盈虧數量%=盤盈虧數量/庫存數量';
     ws1.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
-    ws1.getCell('A1').font = { ...fontStyle, size: 9, color: { argb: 'FF1E40AF' }, bold: true };
 
-    ws1.mergeCells('A2:E2');
-    ws1.getCell('A2').value = '盤盈虧金額差異%=盤盈虧金額/庫存金額';
-    ws1.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
-    ws1.getCell('A2').font = { ...fontStyle, size: 9, color: { argb: 'FF9A3412' }, bold: true };
+    ws1.getCell('A4').value = "盤點日期：" + session.dateStr;
 
-    // 盤點日期顯示於 A4
-    if (detectedInventoryDateStr) {
-        ws1.getCell('A4').value = "盤點日期：" + detectedInventoryDateStr;
-        ws1.getCell('A4').font = { ...fontStyle, bold: true, color: { argb: 'FF1E40AF' } };
-    }
-
-    // 左側 ALL KPI 指標表 (A5:E8)
-    const kpiHeaders = ["A L L", "盤盈虧數量%", "盤盈虧數量絕對值%", "盤盈虧金額%", "盤盈虧金額(絕對值)%"];
-    const qtyPct = overallKPI.totalStockQty ? overallKPI.totalDiffQty / overallKPI.totalStockQty : 0;
-    const absQtyPct = overallKPI.totalStockQty ? overallKPI.totalAbsDiffQty / overallKPI.totalStockQty : 0;
-    const amtPct = overallKPI.totalStockAmt ? overallKPI.totalDiffAmt / overallKPI.totalStockAmt : 0;
-    const absAmtPct = overallKPI.totalStockAmt ? overallKPI.totalAbsDiffAmt / overallKPI.totalStockAmt : 0;
-
-    ws1.mergeCells('A5:A6');
-    ws1.getCell('A5').value = "A L L";
-    ws1.getCell('A5').font = { ...fontStyle, size: 12, bold: true };
-    ws1.getCell('A5').alignment = { vertical: 'middle', horizontal: 'center' };
-
-    for (let col = 2; col <= 5; col++) {
-        const cell = ws1.getCell(5, col);
-        cell.value = kpiHeaders[col - 1];
-        cell.font = { ...fontStyle, bold: true };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
-        cell.alignment = { horizontal: 'center' };
-    }
-
-    const kpiVals = [qtyPct, absQtyPct, amtPct, absAmtPct];
-    for (let col = 2; col <= 5; col++) {
-        const cell = ws1.getCell(6, col);
-        cell.value = kpiVals[col - 2];
-        cell.numFmt = '0.000%';
-        cell.font = fontStyle;
-        cell.alignment = { horizontal: 'center' };
-    }
-
-    // 目標列
-    ws1.getCell('A7').value = "目標";
-    ws1.getCell('B7').value = "±0.2%";
-    ws1.getCell('D7').value = "±20000";
-
-    ['A7', 'B7', 'C7', 'D7', 'E7'].forEach(cellRef => {
-        const cell = ws1.getCell(cellRef);
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF84CC16' } };
-        cell.font = { ...fontStyle, bold: true };
-        cell.alignment = { horizontal: 'center' };
-    });
-
-    // 總額列
-    ws1.getCell('D8').value = overallKPI.totalDiffAmt;
-    ws1.getCell('D8').numFmt = '-#,##0';
-    ws1.getCell('D8').font = { ...fontStyle, color: { argb: 'FFDC2626' }, bold: true };
-    ws1.getCell('D8').alignment = { horizontal: 'center' };
-
-    ws1.getCell('E8').value = overallKPI.totalAbsDiffAmt;
-    ws1.getCell('E8').numFmt = '#,##0';
-    ws1.getCell('E8').font = { ...fontStyle, bold: true };
-    ws1.getCell('E8').alignment = { horizontal: 'center' };
-
-    for (let r = 5; r <= 8; r++) {
-        for (let c = 1; c <= 5; c++) {
-            ws1.getCell(r, c).border = thinBorder;
-        }
-    }
-
-    // 右側主表 (G1 開始)
-    const mainHeaders = [
-        "ＡＬＬ", "庫存數量", "盤點數量", "盤盈虧數量", "盤盈虧金額", "庫存金額",
-        "盤盈虧數量(絕對值)", "盤盈虧數量%", "盤盈虧數量(絕對值)%", "盤盈虧金額(絕對值)", "盤盈虧金額差異%", "盤盈虧金額差異(絕對值)%"
-    ];
-
+    const mainHeaders = ["ＡＬＬ", "庫存數量", "盤點數量", "盤盈虧數量", "盤盈虧金額", "庫存金額", "盤盈虧數量(絕對值)", "盤盈虧數量%", "盤盈虧數量(絕對值)%", "盤盈虧金額(絕對值)", "盤盈虧金額差異%", "盤盈虧金額差異(絕對值)%"];
     mainHeaders.forEach((h, idx) => {
         const cell = ws1.getCell(1, 7 + idx);
         cell.value = h;
         cell.font = { ...fontStyle, bold: true };
-        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
         cell.border = thinBorder;
     });
 
-    ws1.getRow(1).height = 28;
-
-    warehouseSummary.forEach((row, rowIdx) => {
+    session.warehouseSummary.forEach((row, rowIdx) => {
         const rNum = 2 + rowIdx;
         const isNoCheck = row.count === 0 && row.stockQty === 0;
-
         const qPct = row.stockQty ? row.diffQty / row.stockQty : 0;
         const absQPct = row.stockQty ? row.absDiffQty / row.stockQty : 0;
         const aPct = row.stockAmt ? row.diffAmt / row.stockAmt : 0;
         const absAPct = row.stockAmt ? row.absDiffAmt / row.stockAmt : 0;
 
-        const rowData = [
-            row.warehouse, row.stockQty, row.checkQty, row.diffQty, row.diffAmt, row.stockAmt,
-            row.absDiffQty, isNoCheck ? "無盤點" : qPct, isNoCheck ? "無盤點" : absQPct,
-            row.absDiffAmt, isNoCheck ? "無盤點" : aPct, isNoCheck ? "無盤點" : absAPct
-        ];
-
+        const rowData = [row.warehouse, row.stockQty, row.checkQty, row.diffQty, row.diffAmt, row.stockAmt, row.absDiffQty, isNoCheck ? "無盤點" : qPct, isNoCheck ? "無盤點" : absQPct, row.absDiffAmt, isNoCheck ? "無盤點" : aPct, isNoCheck ? "無盤點" : absAPct];
         rowData.forEach((val, colIdx) => {
             const cell = ws1.getCell(rNum, 7 + colIdx);
             cell.value = val;
             cell.font = fontStyle;
             cell.border = thinBorder;
-
-            if (colIdx === 0) {
-                cell.alignment = { horizontal: 'left' };
-            } else if (typeof val === 'number') {
-                if (colIdx === 1 || colIdx === 2 || colIdx === 3 || colIdx === 6) cell.numFmt = '#,##0.00';
-                else if (colIdx === 4 || colIdx === 5 || colIdx === 9) cell.numFmt = '#,##0';
-                else if (colIdx === 7 || colIdx === 8 || colIdx === 10 || colIdx === 11) cell.numFmt = '0.00%';
-                
-                if (val < 0) cell.font = { ...fontStyle, color: { argb: 'FFDC2626' } };
-            } else {
-                cell.alignment = { horizontal: 'center' };
-            }
-
-            if (colIdx === 6) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECFCCB' } };
-            else if (colIdx === 7 || colIdx === 8) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
-            else if (colIdx === 9) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE9E6' } };
-            else if (colIdx === 10) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
-            else if (colIdx === 11) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
         });
     });
-
-    ws1.columns = [
-        { width: 14 }, { width: 16 }, { width: 18 }, { width: 16 }, { width: 18 }, { width: 4 },
-        { width: 22 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 15 },
-        { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 16 }, { width: 16 }
-    ];
-
-    // -------------------------------------------------------------
-    // Sheet 2: 盤盈虧明細表
-    // -------------------------------------------------------------
-    const ws2 = workbook.addWorksheet('盤盈虧明細表');
-    ws2.views = [{ showGridLines: true }];
-
-    const detailHeaders = [
-        "盤點日期", "盤點單號", "品類", "品項代號", "品項名稱", "庫存單位", "倉庫",
-        "庫存數量", "盤點數量", "盤盈虧數量", "單位成本", "盤盈虧金額", "庫存金額"
-    ];
-
-    detailHeaders.forEach((h, idx) => {
-        const cell = ws2.getCell(1, idx + 1);
-        cell.value = h;
-        cell.font = { ...fontStyle, bold: true, color: { argb: 'FFFFFFFF' } };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        cell.border = thinBorder;
-    });
-
-    ws2.getRow(1).height = 24;
-
-    rawData.forEach((item, idx) => {
-        const rNum = idx + 2;
-        let displayWH = item.warehouse;
-        if (item.warehouse.includes("理貨倉") && item.code.toUpperCase().startsWith("Z")) displayWH = "理貨倉(包材)";
-        else if (item.warehouse.includes("包裝/原料倉") && item.code.toUpperCase().startsWith("Z")) displayWH = "包裝/原料倉(包材)";
-
-        const rowValues = [
-            item.date, item.no, item.category, item.code, item.name, item.unit, displayWH,
-            item.stockQty, item.checkQty, item.diffQty, item.cost, item.diffAmt, item.stockAmt
-        ];
-
-        rowValues.forEach((val, colIdx) => {
-            const cell = ws2.getCell(rNum, colIdx + 1);
-            cell.value = val;
-            cell.font = fontStyle;
-            cell.border = thinBorder;
-
-            if (colIdx < 7) {
-                cell.alignment = { horizontal: (colIdx === 4 || colIdx === 6) ? 'left' : 'center' };
-            } else {
-                cell.alignment = { horizontal: 'right' };
-                if (colIdx === 7 || colIdx === 8 || colIdx === 9) cell.numFmt = '#,##0.00';
-                else if (colIdx === 10) cell.numFmt = '$#,##0.0000';
-                else if (colIdx === 11 || colIdx === 12) cell.numFmt = '$#,##0';
-
-                if (val < 0) cell.font = { ...fontStyle, color: { argb: 'FFDC2626' } };
-            }
-        });
-    });
-
-    ws2.columns = [
-        { width: 12 }, { width: 16 }, { width: 14 }, { width: 14 }, { width: 32 }, { width: 10 }, { width: 22 },
-        { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 16 }
-    ];
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    
-    // 檔名格式為「盤盈虧彙總表MMDD_MMDD.xlsx」
-    const outFileName = dateFileNameSegment ? `盤盈虧彙總表${dateFileNameSegment}.xlsx` : `盤盈虧彙總表.xlsx`;
-    link.download = outFileName;
+    link.download = `盤盈虧彙總表${session.fileNameSeg}.xlsx`;
     link.click();
+}
+
+async function exportHistoryExcel() {
+    if (historySessions.length === 0) return alert("尚無歷史數據可供匯出！");
+
+    const workbook = new ExcelJS.Workbook();
+    const ws = workbook.addWorksheet('歷次倉別盤盈虧對比');
+    ws.views = [{ showGridLines: true }];
+
+    const headers = ["倉庫名稱"];
+    historySessions.forEach(s => headers.push(`${s.dateStr} (盈虧金額)`, `${s.dateStr} (絕對值金額)`));
+    
+    ws.getRow(1).values = headers;
+    ws.getRow(1).font = { name: '微軟正黑體', bold: true };
+
+    defaultWhOrder.forEach((whName, idx) => {
+        const rowVals = [whName];
+        historySessions.forEach(s => {
+            const item = s.warehouseSummary.find(w => w.warehouse === whName);
+            if (item) {
+                rowVals.push(item.diffAmt, item.absDiffAmt);
+            } else {
+                rowVals.push(0, 0);
+            }
+        });
+        ws.getRow(idx + 2).values = rowVals;
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `盤盈虧歷次對比分析總表.xlsx`;
+    link.click();
+}
+
+function saveFirebaseConfig() {
+    const val = document.getElementById('firebaseConfigInput').value;
+    try {
+        JSON.parse(val);
+        localStorage.setItem("firebase_config_v9", val);
+        alert("Firebase Config 儲存成功！");
+    } catch(e) {
+        alert("請輸入正確格式的 JSON 格式！");
+    }
 }
 </script>
 
