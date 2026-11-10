@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統 (V13 日期補齊與動態倉別版)</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V14 欄位順序與名稱全兼容版)</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -299,8 +299,8 @@
 <div class="container">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V13)</h1>
-            <p>已修復空白日期向下填補與動態倉別捕捉機制，確保歷史盤點數據完全精準連線。</p>
+            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V14)</h1>
+            <p>已整合同義詞自動對應與靈活欄位位置解析，無論 Excel 欄位順序為何均可完美讀取！</p>
         </div>
         <div class="header-badges">
             <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
@@ -556,7 +556,6 @@ function readFileAsync(file) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array', cellDates: true });
             
-            // 💡 1. 優先尋找名稱包含「明細」的工作表，若無則預設讀取第一個 Sheet
             let targetSheetName = workbook.SheetNames.find(name => name.includes('明細'));
             if (!targetSheetName) {
                 targetSheetName = workbook.SheetNames[0];
@@ -587,13 +586,12 @@ function parseSheetData(rows, fileName) {
     let rawData = [];
     let headerIdx = -1;
 
-    // 💡 2. 全掃描模式：前 30 列尋找欄位標題
     for (let i = 0; i < Math.min(rows.length, 30); i++) {
         if (!rows[i]) continue;
         const rowStr = rows[i].map(c => String(c || '').replace(/\s+/g, '')).join(',');
         
         if ((rowStr.includes('倉庫') || rowStr.includes('倉別')) && 
-            (rowStr.includes('庫存數量') || rowStr.includes('盤點數量') || rowStr.includes('庫存金額'))) {
+            (rowStr.includes('庫存數量') || rowStr.includes('盤點數量') || rowStr.includes('庫存金額') || rowStr.includes('盤盈虧'))) {
             headerIdx = i;
             break;
         }
@@ -607,6 +605,7 @@ function parseSheetData(rows, fileName) {
     const rawHeaders = rows[headerIdx];
     const headers = rawHeaders.map(h => String(h || '').trim());
 
+    // 💡 V14 升級：全方位欄位關鍵字相容性配對
     const getCol = (nameKeywords) => headers.findIndex(h => nameKeywords.some(kw => h.includes(kw)));
 
     const cDate = getCol(['盤點日期', '日期']);
@@ -618,9 +617,13 @@ function parseSheetData(rows, fileName) {
     const cWH = getCol(['倉庫', '倉別', 'ＡＬＬ', 'ALL']);
     const cStockQty = getCol(['庫存數量', '庫存數']);
     const cCheckQty = getCol(['盤點數量', '盤點數']);
-    const cDiffQty = getCol(['盤盈虧數量', '盤差數量']);
+    
+    // 💡 關鍵抓取：支援「盤盈虧數量」、「盤盈虧數」、「數量差異」、「盤差數量」
+    const cDiffQty = getCol(['盤盈虧數量', '盤盈虧數', '數量差異', '盤差數量']);
     const cCost = getCol(['單位成本', '單價']);
-    const cDiffAmt = getCol(['盤盈虧金額', '盤差金額']);
+    
+    // 💡 關鍵抓取：支援「盤盈虧金額」、「盤盈虧金」、「金額差異」、「盤差金額」
+    const cDiffAmt = getCol(['盤盈虧金額', '盤盈虧金', '金額差異', '盤差金額']);
     const cStockAmt = getCol(['庫存金額']);
 
     const dateSet = new Set();
@@ -635,7 +638,6 @@ function parseSheetData(rows, fileName) {
 
         const code = cCode !== -1 && row[cCode] ? String(row[cCode]).trim() : '';
         
-        // 💡 關鍵修復 1: 日期向下填補邏輯 (Forward Fill)
         let dVal = cDate !== -1 && row[cDate] ? String(row[cDate]).trim() : '';
         if (dVal) {
             lastValidDate = dVal;
@@ -643,6 +645,17 @@ function parseSheetData(rows, fileName) {
             dVal = lastValidDate;
         }
         if (dVal) dateSet.add(dVal);
+
+        // 提取並解析數值
+        const stockQty = cStockQty !== -1 ? (parseFloat(String(row[cStockQty] || '0').replace(/,/g, '')) || 0) : 0;
+        const checkQty = cCheckQty !== -1 ? (parseFloat(String(row[cCheckQty] || '0').replace(/,/g, '')) || 0) : 0;
+        
+        // 若 Excel 無獨立盤差欄，自動相減計算法
+        let diffQty = cDiffQty !== -1 ? (parseFloat(String(row[cDiffQty] || '0').replace(/,/g, '')) || 0) : (checkQty - stockQty);
+        
+        const cost = cCost !== -1 ? (parseFloat(String(row[cCost] || '0').replace(/,/g, '')) || 0) : 0;
+        let diffAmt = cDiffAmt !== -1 ? (parseFloat(String(row[cDiffAmt] || '0').replace(/,/g, '')) || 0) : (diffQty * cost);
+        const stockAmt = cStockAmt !== -1 ? (parseFloat(String(row[cStockAmt] || '0').replace(/,/g, '')) || 0) : (stockQty * cost);
 
         rawData.push({
             date: dVal,
@@ -652,12 +665,12 @@ function parseSheetData(rows, fileName) {
             name: cName !== -1 ? row[cName] || '' : '',
             unit: cUnit !== -1 ? row[cUnit] || '' : '',
             warehouse: wh,
-            stockQty: cStockQty !== -1 ? (parseFloat(String(row[cStockQty] || '0').replace(/,/g, '')) || 0) : 0,
-            checkQty: cCheckQty !== -1 ? (parseFloat(String(row[cCheckQty] || '0').replace(/,/g, '')) || 0) : 0,
-            diffQty: cDiffQty !== -1 ? (parseFloat(String(row[cDiffQty] || '0').replace(/,/g, '')) || 0) : 0,
-            cost: cCost !== -1 ? (parseFloat(String(row[cCost] || '0').replace(/,/g, '')) || 0) : 0,
-            diffAmt: cDiffAmt !== -1 ? (parseFloat(String(row[cDiffAmt] || '0').replace(/,/g, '')) || 0) : 0,
-            stockAmt: cStockAmt !== -1 ? (parseFloat(String(row[cStockAmt] || '0').replace(/,/g, '')) || 0) : 0
+            stockQty: stockQty,
+            checkQty: checkQty,
+            diffQty: diffQty,
+            cost: cost,
+            diffAmt: diffAmt,
+            stockAmt: stockAmt
         });
     }
 
@@ -1067,21 +1080,21 @@ function removeHistorySession(id) {
 function clearAllHistory() {
     if (confirm("確定要清除所有盤點歷史紀錄嗎？")) {
         historySessions = [];
-        localStorage.removeItem("inventory_history_v13");
+        localStorage.removeItem("inventory_history_v14");
         updateUI();
     }
 }
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v13", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v14", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v13");
+    const data = localStorage.getItem("inventory_history_v14");
     if (data) {
         try {
             historySessions = JSON.parse(data);
