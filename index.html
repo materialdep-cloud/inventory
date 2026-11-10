@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統 (V11 趨勢圖抓取修復版)</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V12.1 雙頁次全解析修復版)</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -253,6 +253,7 @@
             align-items: center;
             gap: 8px;
             border: 1px solid #cbd5e1;
+            margin-bottom: 8px;
         }
         .history-chip .remove-chip {
             cursor: pointer;
@@ -298,8 +299,8 @@
 <div class="container">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V11)</h1>
-            <p>已修復對比曲線圖抓取邏輯，確保所有倉庫盤點數值能精準連線。</p>
+            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V12.1)</h1>
+            <p>已全方位支援單頁明細與雙頁次彙總 Excel 解析，並自動備用跨期對比趨勢。</p>
         </div>
         <div class="header-badges">
             <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
@@ -308,7 +309,7 @@
     </header>
 
     <div class="upload-section" id="dropZone">
-        <p style="margin: 0; font-size: 1rem; color: #475569;">拖曳 Excel 盤點表至此處（支援一次上傳多檔案，或多次累積上傳）</p>
+        <p style="margin: 0; font-size: 1rem; color: #475569;">拖曳 Excel 盤點表至此處（支援原始明細檔或匯出之彙總表，可一次上傳多檔）</p>
         <input type="file" id="fileInput" accept=".xlsx, .xls" multiple style="display: none;">
         <button class="upload-btn" onclick="document.getElementById('fileInput').click()">選擇 Excel 檔案 (可複選)</button>
     </div>
@@ -554,8 +555,16 @@ function readFileAsync(file) {
         reader.onload = function(e) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            
+            // 💡 優先尋找名稱包含「明細」的工作表，若無則預設讀取第一個 Sheet
+            let targetSheetName = workbook.SheetNames.find(name => name.includes('明細'));
+            if (!targetSheetName) {
+                targetSheetName = workbook.SheetNames[0];
+            }
+            
+            const sheet = workbook.Sheets[targetSheetName];
             const json = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+            
             parseSheetData(json, file.name);
             resolve();
         };
@@ -578,34 +587,43 @@ function parseSheetData(rows, fileName) {
     let rawData = [];
     let headerIdx = -1;
 
-    for (let i = 0; i < Math.min(rows.length, 10); i++) {
-        if (rows[i] && rows[i].includes('倉庫') && rows[i].includes('庫存數量')) {
+    // 💡 全掃描模式：掃描前 30 列，跨欄尋找含有「倉庫/倉別」與「庫存數量/盤點數量」的列
+    for (let i = 0; i < Math.min(rows.length, 30); i++) {
+        if (!rows[i]) continue;
+        const rowStr = rows[i].map(c => String(c || '').replace(/\s+/g, '')).join(',');
+        
+        if ((rowStr.includes('倉庫') || rowStr.includes('倉別')) && 
+            (rowStr.includes('庫存數量') || rowStr.includes('盤點數量') || rowStr.includes('庫存金額'))) {
             headerIdx = i;
             break;
         }
     }
 
     if (headerIdx === -1) {
-        alert(`無法解析檔案 ${fileName}！請確認包含「倉庫」、「庫存數量」、「盤點數量」等欄位。`);
+        alert(`無法解析檔案 ${fileName}！\n請確認檔案中是否包含「倉庫」、「庫存數量」與「盤點數量」等欄位標題。`);
         return;
     }
 
-    const headers = rows[headerIdx];
-    const getCol = (name) => headers.indexOf(name);
+    const rawHeaders = rows[headerIdx];
+    const headers = rawHeaders.map(h => String(h || '').trim());
 
-    const cDate = getCol('盤點日期');
-    const cNo = getCol('盤點單號');
-    const cCategory = getCol('品類');
-    const cCode = getCol('品項代號');
-    const cName = getCol('品項名稱');
-    const cUnit = getCol('庫存單位');
-    const cWH = getCol('倉庫');
-    const cStockQty = getCol('庫存數量');
-    const cCheckQty = getCol('盤點數量');
-    const cDiffQty = getCol('盤盈虧數量');
-    const cCost = getCol('單位成本');
-    const cDiffAmt = getCol('盤盈虧金額');
-    const cStockAmt = getCol('庫存金額');
+    const getCol = (nameKeywords) => {
+        return headers.findIndex(h => nameKeywords.some(kw => h.includes(kw)));
+    };
+
+    const cDate = getCol(['盤點日期', '日期']);
+    const cNo = getCol(['盤點單號', '單號']);
+    const cCategory = getCol(['品類', '分類']);
+    const cCode = getCol(['品項代號', '料號', '品號']);
+    const cName = getCol(['品項名稱', '品名']);
+    const cUnit = getCol(['庫存單位', '單位']);
+    const cWH = getCol(['倉庫', '倉別', 'ＡＬＬ', 'ALL']);
+    const cStockQty = getCol(['庫存數量', '庫存數']);
+    const cCheckQty = getCol(['盤點數量', '盤點數']);
+    const cDiffQty = getCol(['盤盈虧數量', '盤差數量']);
+    const cCost = getCol(['單位成本', '單價']);
+    const cDiffAmt = getCol(['盤盈虧金額', '盤差金額']);
+    const cStockAmt = getCol(['庫存金額']);
 
     const dateSet = new Set();
 
@@ -613,27 +631,27 @@ function parseSheetData(rows, fileName) {
         const row = rows[i];
         if (!row || row.length === 0) continue;
 
-        const wh = row[cWH] ? String(row[cWH]).trim() : '';
+        const wh = cWH !== -1 && row[cWH] ? String(row[cWH]).trim() : '';
         if (!wh || wh === '倉庫' || wh.includes('ALL') || wh.includes('合計') || wh.includes('總計')) continue;
 
-        const code = row[cCode] ? String(row[cCode]).trim() : '';
-        const dVal = row[cDate] ? String(row[cDate]).trim() : '';
+        const code = cCode !== -1 && row[cCode] ? String(row[cCode]).trim() : '';
+        const dVal = cDate !== -1 && row[cDate] ? String(row[cDate]).trim() : '';
         if (dVal) dateSet.add(dVal);
 
         rawData.push({
             date: dVal,
-            no: row[cNo] || '',
-            category: row[cCategory] || '',
+            no: cNo !== -1 ? row[cNo] || '' : '',
+            category: cCategory !== -1 ? row[cCategory] || '' : '',
             code: code,
-            name: row[cName] || '',
-            unit: row[cUnit] || '',
+            name: cName !== -1 ? row[cName] || '' : '',
+            unit: cUnit !== -1 ? row[cUnit] || '' : '',
             warehouse: wh,
-            stockQty: parseFloat(String(row[cStockQty]).replace(/,/g, '')) || 0,
-            checkQty: parseFloat(String(row[cCheckQty]).replace(/,/g, '')) || 0,
-            diffQty: parseFloat(String(row[cDiffQty]).replace(/,/g, '')) || 0,
-            cost: parseFloat(String(row[cCost]).replace(/,/g, '')) || 0,
-            diffAmt: parseFloat(String(row[cDiffAmt]).replace(/,/g, '')) || 0,
-            stockAmt: parseFloat(String(row[cStockAmt]).replace(/,/g, '')) || 0
+            stockQty: cStockQty !== -1 ? (parseFloat(String(row[cStockQty] || '0').replace(/,/g, '')) || 0) : 0,
+            checkQty: cCheckQty !== -1 ? (parseFloat(String(row[cCheckQty] || '0').replace(/,/g, '')) || 0) : 0,
+            diffQty: cDiffQty !== -1 ? (parseFloat(String(row[cDiffQty] || '0').replace(/,/g, '')) || 0) : 0,
+            cost: cCost !== -1 ? (parseFloat(String(row[cCost] || '0').replace(/,/g, '')) || 0) : 0,
+            diffAmt: cDiffAmt !== -1 ? (parseFloat(String(row[cDiffAmt] || '0').replace(/,/g, '')) || 0) : 0,
+            stockAmt: cStockAmt !== -1 ? (parseFloat(String(row[cStockAmt] || '0').replace(/,/g, '')) || 0) : 0
         });
     }
 
@@ -642,16 +660,14 @@ function parseSheetData(rows, fileName) {
     let dateFileNameSegment = "";
 
     if (sortedDates.length === 0) {
-        detectedInventoryDateStr = fileName.replace(/\.[^/.]+$/, "");
+        detectedInventoryDateStr = fileName.replace(/\.[^/.]+$/, "").replace("盤盈虧彙總表", "期別 ");
         dateFileNameSegment = "自訂";
     } else if (sortedDates.length === 1) {
         detectedInventoryDateStr = sortedDates[0];
         dateFileNameSegment = formatMMDD(sortedDates[0]);
     } else {
         detectedInventoryDateStr = `${sortedDates[0]} ~ ${sortedDates[sortedDates.length - 1]}`;
-        const startMMDD = formatMMDD(sortedDates[0]);
-        const endMMDD = formatMMDD(sortedDates[sortedDates.length - 1]);
-        dateFileNameSegment = `${startMMDD}_${endMMDD}`;
+        dateFileNameSegment = `${formatMMDD(sortedDates[0])}_${formatMMDD(sortedDates[sortedDates.length - 1])}`;
     }
 
     const summaryRes = computeWarehouseSummary(rawData);
@@ -777,7 +793,6 @@ function selectAllWarehouses(checked) {
     renderTrendChart();
 }
 
-// 📈 核心修復：高容錯率之折線圖資料抓取邏輯
 function renderTrendChart() {
     if (historySessions.length === 0) return;
 
@@ -791,7 +806,6 @@ function renderTrendChart() {
         if (!checkedBoxes.includes(whName)) return;
 
         const dataPoints = historySessions.map(s => {
-            // 模糊/精準兩階段匹配
             let item = s.warehouseSummary.find(w => w.warehouse.trim() === whName.trim());
             if (!item) {
                 item = s.warehouseSummary.find(w => w.warehouse.includes(whName) || whName.includes(w.warehouse));
@@ -1031,21 +1045,21 @@ function removeHistorySession(id) {
 function clearAllHistory() {
     if (confirm("確定要清除所有盤點歷史紀錄嗎？")) {
         historySessions = [];
-        localStorage.removeItem("inventory_history_v11");
+        localStorage.removeItem("inventory_history_v12_1");
         updateUI();
     }
 }
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v11", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v12_1", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v11");
+    const data = localStorage.getItem("inventory_history_v12_1");
     if (data) {
         try {
             historySessions = JSON.parse(data);
