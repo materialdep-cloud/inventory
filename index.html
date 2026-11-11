@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統 (V15 欄位標題與順序全兼容版)</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V16 金額欄位標頭精準解析版)</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -299,8 +299,8 @@
 <div class="container">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V15)</h1>
-            <p>包含：盤盈虧數、數量差異、單位成本、盤盈虧金、庫存金額、金額差異 之全相容讀取！</p>
+            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V16)</h1>
+            <p>已修復抬頭標題防誤判機制，精準對應：單位成本、盤盈虧金/額、庫存金額！</p>
         </div>
         <div class="header-badges">
             <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
@@ -582,31 +582,43 @@ function formatMMDD(dateStr) {
     return dateStr.replace(/[^0-9]/g, '');
 }
 
+// 通用轉數字函數，清除貨幣符號、逗號與多餘空白
+function cleanVal(v) {
+    if (v === null || v === undefined) return 0;
+    const str = String(v).replace(/[\$,\s\t]/g, '');
+    const num = parseFloat(str);
+    return isNaN(num) ? 0 : num;
+}
+
 function parseSheetData(rows, fileName) {
     let rawData = [];
     let headerIdx = -1;
 
+    // 💡 V16 防誤判機制：必須同時具有品項/倉庫欄位與數量/金額欄位，確保避開大標題
     for (let i = 0; i < Math.min(rows.length, 30); i++) {
         if (!rows[i]) continue;
         const rowStr = rows[i].map(c => String(c || '').replace(/\s+/g, '')).join(',');
         
-        if ((rowStr.includes('倉庫') || rowStr.includes('倉別')) && 
-            (rowStr.includes('庫存') || rowStr.includes('盤點') || rowStr.includes('盤盈虧') || rowStr.includes('差異'))) {
+        const hasItemOrWh = rowStr.includes('倉庫') || rowStr.includes('倉別') || rowStr.includes('品項') || rowStr.includes('品類');
+        const hasDataCol = rowStr.includes('庫存') || rowStr.includes('盤點') || rowStr.includes('成本') || rowStr.includes('金額') || rowStr.includes('盤盈虧');
+
+        if (hasItemOrWh && hasDataCol) {
             headerIdx = i;
             break;
         }
     }
 
     if (headerIdx === -1) {
-        alert(`無法解析檔案 ${fileName}！\n請確認檔案中是否包含「倉庫」、「庫存」與「盤點」等標頭欄位。`);
+        alert(`無法解析檔案 ${fileName}！\n請確認檔案中是否包含正確的標題列（如：品項名稱、倉庫、庫存數量等）。`);
         return;
     }
 
     const rawHeaders = rows[headerIdx];
-    const headers = rawHeaders.map(h => String(h || '').trim());
+    // 清理標頭，移除內部所有換行符與無效空白
+    const headers = rawHeaders.map(h => String(h || '').replace(/[\r\n\s]+/g, '').trim());
 
-    // 💡 V15 精確匹配邏輯：動態配對同義標題
-    const getCol = (nameKeywords) => headers.findIndex(h => nameKeywords.some(kw => h.includes(kw)));
+    // 💡 V16 多重關鍵字比對
+    const getCol = (keywords) => headers.findIndex(h => keywords.some(kw => h.includes(kw)));
 
     const cDate = getCol(['盤點日期', '日期']);
     const cNo = getCol(['盤點單號', '單號']);
@@ -618,16 +630,16 @@ function parseSheetData(rows, fileName) {
     const cStockQty = getCol(['庫存數量', '庫存數']);
     const cCheckQty = getCol(['盤點數量', '盤點數', '實盤數']);
     
-    // 💡 全相容：包含 盤盈虧數、數量差異、盤盈虧數量、盤差數量
+    // 💡 精準支援：盤盈虧數量 / 盤盈虧數 / 數量差異 / 盤差數量
     const cDiffQty = getCol(['盤盈虧數量', '盤盈虧數', '數量差異', '盤差數量']);
     
-    // 💡 全相容：包含 單位成本、單價、成本
+    // 💡 精準支援：單位成本 / 單價 / 成本
     const cCost = getCol(['單位成本', '單價', '成本']);
     
-    // 💡 全相容：包含 盤盈虧金額、盤盈虧金、金額差異、盤差金額
+    // 💡 精準支援：盤盈虧金額 / 盤盈虧金 / 金額差異 / 盤差金額
     const cDiffAmt = getCol(['盤盈虧金額', '盤盈虧金', '金額差異', '盤差金額']);
     
-    // 💡 全相容：包含 庫存金額、庫存總金額
+    // 💡 精準支援：庫存金額 / 庫存金額($) / 庫存總額
     const cStockAmt = getCol(['庫存金額', '庫存總額']);
 
     const dateSet = new Set();
@@ -650,16 +662,25 @@ function parseSheetData(rows, fileName) {
         }
         if (dVal) dateSet.add(dVal);
 
-        // 提取與轉型數值
-        const stockQty = cStockQty !== -1 ? (parseFloat(String(row[cStockQty] || '0').replace(/,/g, '')) || 0) : 0;
-        const checkQty = cCheckQty !== -1 ? (parseFloat(String(row[cCheckQty] || '0').replace(/,/g, '')) || 0) : 0;
+        // 使用 cleanVal 強效轉數值
+        const stockQty = cStockQty !== -1 ? cleanVal(row[cStockQty]) : 0;
+        const checkQty = cCheckQty !== -1 ? cleanVal(row[cCheckQty]) : 0;
+        let diffQty = cDiffQty !== -1 ? cleanVal(row[cDiffQty]) : (checkQty - stockQty);
         
-        // 若 Excel 無獨立差異欄位則自行相減
-        let diffQty = cDiffQty !== -1 ? (parseFloat(String(row[cDiffQty] || '0').replace(/,/g, '')) || 0) : (checkQty - stockQty);
-        
-        const cost = cCost !== -1 ? (parseFloat(String(row[cCost] || '0').replace(/,/g, '')) || 0) : 0;
-        let diffAmt = cDiffAmt !== -1 ? (parseFloat(String(row[cDiffAmt] || '0').replace(/,/g, '')) || 0) : (diffQty * cost);
-        const stockAmt = cStockAmt !== -1 ? (parseFloat(String(row[cStockAmt] || '0').replace(/,/g, '')) || 0) : (stockQty * cost);
+        let cost = cCost !== -1 ? cleanVal(row[cCost]) : 0;
+        let diffAmt = cDiffAmt !== -1 ? cleanVal(row[cDiffAmt]) : 0;
+        let stockAmt = cStockAmt !== -1 ? cleanVal(row[cStockAmt]) : 0;
+
+        // 💡 若只有其中一項數據，自動以公式補齊相依數值
+        if (cost === 0 && stockQty !== 0 && stockAmt !== 0) {
+            cost = stockAmt / stockQty;
+        }
+        if (diffAmt === 0 && diffQty !== 0 && cost !== 0) {
+            diffAmt = diffQty * cost;
+        }
+        if (stockAmt === 0 && stockQty !== 0 && cost !== 0) {
+            stockAmt = stockQty * cost;
+        }
 
         rawData.push({
             date: dVal,
@@ -1084,21 +1105,21 @@ function removeHistorySession(id) {
 function clearAllHistory() {
     if (confirm("確定要清除所有盤點歷史紀錄嗎？")) {
         historySessions = [];
-        localStorage.removeItem("inventory_history_v15");
+        localStorage.removeItem("inventory_history_v16");
         updateUI();
     }
 }
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v15", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v16", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v15");
+    const data = localStorage.getItem("inventory_history_v16");
     if (data) {
         try {
             historySessions = JSON.parse(data);
