@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統 (V22 整合 Cloud Firestore 雲端同步版)</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V23 補齊指標與公式對照版)</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -153,27 +153,23 @@
             text-align: center;
         }
 
-        .formula-box {
-            margin-bottom: 12px;
-            font-size: 0.85rem;
+        .formula-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
         }
-        .formula-qty {
-            background-color: #dbeafe;
-            color: #1e40af;
-            padding: 6px 12px;
-            border: 1px solid #bfdbfe;
-            margin-bottom: 4px;
-            border-radius: 4px;
-            font-weight: 500;
+        
+        .formula-badge-item {
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.86rem;
+            line-height: 1.5;
         }
-        .formula-amt {
-            background-color: #ffedd5;
-            color: #9a3412;
-            padding: 6px 12px;
-            border: 1px solid #fed7aa;
-            border-radius: 4px;
-            font-weight: 500;
-        }
+        .f-qty { background-color: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+        .f-abs-qty { background-color: #f7fee7; color: #3f6212; border: 1px solid #d9f99d; }
+        .f-amt { background-color: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+        .f-abs-amt { background-color: #fefce8; color: #854d0e; border: 1px solid #fef08a; }
 
         .all-kpi-table th { background-color: #f1f5f9; font-weight: bold; }
         .target-row { background-color: #84cc16 !important; color: #000; font-weight: bold; }
@@ -312,8 +308,8 @@
 <div class="container">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次趨勢對比系統 (V22 雲端版)</h1>
-            <p>已整合 Cloud Firestore 雲端備份機制（多裝置與多人共同同步使用）</p>
+            <h1>📦 盤盈虧彙總與歷次趨勢對比系統 (V23)</h1>
+            <p>全廠(ALL)對比已補齊全8大指標，並附帶各盤點指標計算公式說明！</p>
         </div>
         <div class="header-badges">
             <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
@@ -398,16 +394,38 @@
             <h3 style="margin:0;">🌐 全廠 (ALL) 與 指定倉別 跨期 KPI 重疊對比圖</h3>
         </div>
 
+        <!-- 💡 計算公式說明看板 -->
+        <div class="formula-card-grid">
+            <div class="formula-badge-item f-qty">
+                <strong>🔹 盤盈虧數量%</strong> = 盤盈虧數量 / 庫存數量 × 100%<br>
+                <span style="font-size:0.8rem; opacity:0.85;">衡量正負抵銷後的數量淨差異比例。</span>
+            </div>
+            <div class="formula-badge-item f-abs-qty">
+                <strong>🔹 盤盈虧數量(絕對值)%</strong> = 盤盈虧數量絕對值 / 庫存數量 × 100%<br>
+                <span style="font-size:0.8rem; opacity:0.85;">不分正負，反映實體庫存盤點總誤差率（越接近0%越準）。</span>
+            </div>
+            <div class="formula-badge-item f-amt">
+                <strong>🔹 盤盈虧金額差異%</strong> = 盤盈虧金額 / 庫存金額 × 100%<br>
+                <span style="font-size:0.8rem; opacity:0.85;">金額淨損益占總庫存價值的比例。</span>
+            </div>
+            <div class="formula-badge-item f-abs-amt">
+                <strong>🔹 盤盈虧金額差異(絕對值)%</strong> = 盤盈虧金額絕對值 / 庫存金額 × 100%<br>
+                <span style="font-size:0.8rem; opacity:0.85;">財務金額變動總規模占庫存價值的比率。</span>
+            </div>
+        </div>
+
         <div class="chart-controls">
             <div>
-                <label style="font-weight: bold; font-size: 0.9rem;">全廠 KPI 對比指標：</label>
+                <label style="font-weight: bold; font-size: 0.9rem;">全廠與各倉對比指標 (共8項)：</label>
                 <select id="allMetricSelect" onchange="renderAllTrendChart()">
-                    <option value="allQtyPct">盤盈虧數量%</option>
-                    <option value="allAbsQtyPct">盤盈虧數量(絕對值)%</option>
-                    <option value="allAmtPct">盤盈虧金額%</option>
-                    <option value="allAbsAmtPct" selected>盤盈虧金額(絕對值)%</option>
                     <option value="allDiffAmt">盤盈虧金額 ($)</option>
                     <option value="allAbsDiffAmt">盤盈虧金額(絕對值) ($)</option>
+                    <option value="allDiffQty">盤盈虧數量</option>
+                    <option value="allAbsDiffQty">盤盈虧數量(絕對值)</option>
+                    <option value="allQtyPct">盤盈虧數量%</option>
+                    <option value="allAbsQtyPct">盤盈虧數量(絕對值)%</option>
+                    <option value="allAmtPct">盤盈虧金額差異%</option>
+                    <option value="allAbsAmtPct" selected>盤盈虧金額差異(絕對值)%</option>
                 </select>
             </div>
             <div style="width: 100%;">
@@ -458,9 +476,9 @@
 
         <div class="layout-grid">
             <div>
-                <div class="formula-box">
-                    <div class="formula-qty">盤盈虧數量% = 盤盈虧數量 / 庫存數量</div>
-                    <div class="formula-amt">盤盈虧金額差異% = 盤盈虧金額 / 庫存金額</div>
+                <div class="formula-card-grid" style="grid-template-columns: 1fr; margin-bottom:12px;">
+                    <div class="formula-badge-item f-qty" style="padding:6px 10px;">盤盈虧數量% = 盤盈虧數量 / 庫存數量</div>
+                    <div class="formula-badge-item f-amt" style="padding:6px 10px;">盤盈虧金額差異% = 盤盈虧金額 / 庫存金額</div>
                 </div>
 
                 <table class="excel-box all-kpi-table">
@@ -574,7 +592,6 @@
 // ==========================================
 // 🔑 1. Firebase 初始化設定區塊
 // ==========================================
-// 👇 請將您在 Firebase Console 看到的 Config 貼在下方 (完全安全，無需傳給任何人)
 const firebaseConfig = {
   apiKey: "AIzaSyA9khVWW9APvXRAB8AYMRZsFoNxQKGZaKI",
   authDomain: "inventory-3fca8.firebaseapp.com",
@@ -594,7 +611,6 @@ try {
         db = firebase.firestore();
         auth = firebase.auth();
 
-        // 匿名登入 (符合 方案 B 規則)
         auth.signInAnonymously().then(() => {
             isCloudConnected = true;
             document.getElementById('cloudStatusBadge').innerText = '☁️ 雲端狀態：已安全連接 (Firestore)';
@@ -843,7 +859,6 @@ function parseSheetData(rows, fileName) {
     historySessions.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
     selectedSessionId = sessionObj.id;
 
-    // ☁️ 寫入雲端 Firestore
     if (isCloudConnected && db) {
         db.collection("inventory_history").doc(sessionObj.id).set(sessionObj)
             .then(() => console.log("已同步雲端:", sessionObj.id))
@@ -1057,6 +1072,7 @@ function renderTrendChart() {
     });
 }
 
+// 💡 渲染全廠 (ALL) 與 指定倉別 同圖重疊對比圖 (完整8指標版)
 function renderAllTrendChart() {
     const activeSessions = historySessions.filter(s => s.enabled !== false);
     if (activeSessions.length === 0) return;
@@ -1067,22 +1083,26 @@ function renderAllTrendChart() {
     const labels = activeSessions.map(s => s.dateStr);
 
     const metricLabels = {
+        'allDiffAmt': '盤盈虧金額 ($)',
+        'allAbsDiffAmt': '盤盈虧金額(絕對值) ($)',
+        'allDiffQty': '盤盈虧數量',
+        'allAbsDiffQty': '盤盈虧數量(絕對值)',
         'allQtyPct': '盤盈虧數量%',
         'allAbsQtyPct': '盤盈虧數量(絕對值)%',
-        'allAmtPct': '盤盈虧金額%',
-        'allAbsAmtPct': '盤盈虧金額(絕對值)%',
-        'allDiffAmt': '盤盈虧金額 ($)',
-        'allAbsDiffAmt': '盤盈虧金額(絕對值) ($)'
+        'allAmtPct': '盤盈虧金額差異%',
+        'allAbsAmtPct': '盤盈虧金額差異(絕對值)%'
     };
 
     const allDataPoints = activeSessions.map(s => {
         const kpi = s.overallKPI;
+        if (metric === 'allDiffAmt') return kpi.totalDiffAmt;
+        if (metric === 'allAbsDiffAmt') return kpi.totalAbsDiffAmt;
+        if (metric === 'allDiffQty') return kpi.totalDiffQty;
+        if (metric === 'allAbsDiffQty') return kpi.totalAbsDiffQty;
         if (metric === 'allQtyPct') return kpi.totalStockQty ? (kpi.totalDiffQty / kpi.totalStockQty) * 100 : 0;
         if (metric === 'allAbsQtyPct') return kpi.totalStockQty ? (kpi.totalAbsDiffQty / kpi.totalStockQty) * 100 : 0;
         if (metric === 'allAmtPct') return kpi.totalStockAmt ? (kpi.totalDiffAmt / kpi.totalStockAmt) * 100 : 0;
         if (metric === 'allAbsAmtPct') return kpi.totalStockAmt ? (kpi.totalAbsDiffAmt / kpi.totalStockAmt) * 100 : 0;
-        if (metric === 'allDiffAmt') return kpi.totalDiffAmt;
-        if (metric === 'allAbsDiffAmt') return kpi.totalAbsDiffAmt;
         return 0;
     });
 
@@ -1107,12 +1127,14 @@ function renderAllTrendChart() {
             if (!item) item = s.warehouseSummary.find(w => w.warehouse.includes(whName) || whName.includes(w.warehouse));
             if (!item || (item.count === 0 && item.stockQty === 0)) return null;
 
+            if (metric === 'allDiffAmt') return item.diffAmt;
+            if (metric === 'allAbsDiffAmt') return item.absDiffAmt;
+            if (metric === 'allDiffQty') return item.diffQty;
+            if (metric === 'allAbsDiffQty') return item.absDiffQty;
             if (metric === 'allQtyPct') return item.stockQty ? (item.diffQty / item.stockQty) * 100 : 0;
             if (metric === 'allAbsQtyPct') return item.stockQty ? (item.absDiffQty / item.stockQty) * 100 : 0;
             if (metric === 'allAmtPct') return item.stockAmt ? (item.diffAmt / item.stockAmt) * 100 : 0;
             if (metric === 'allAbsAmtPct') return item.stockAmt ? (item.absDiffAmt / item.stockAmt) * 100 : 0;
-            if (metric === 'allDiffAmt') return item.diffAmt;
-            if (metric === 'allAbsDiffAmt') return item.absDiffAmt;
             return 0;
         });
 
@@ -1143,7 +1165,7 @@ function renderAllTrendChart() {
             },
             scales: {
                 x: { title: { display: true, text: '盤點期數梯次' } },
-                y: { title: { display: true, text: metric.includes('Pct') ? '百分比 (%)' : '金額 ($)' } }
+                y: { title: { display: true, text: metric.includes('Pct') ? '百分比 (%)' : (metric.includes('Amt') ? '金額 ($)' : '數量') } }
             }
         }
     });
@@ -1405,21 +1427,21 @@ function removeHistorySession(id) {
 function clearAllHistory() {
     if (confirm("確定要清除所有盤點歷史紀錄嗎？")) {
         historySessions = [];
-        localStorage.removeItem("inventory_history_v22");
+        localStorage.removeItem("inventory_history_v23");
         updateUI();
     }
 }
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v22", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v23", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v22");
+    const data = localStorage.getItem("inventory_history_v23");
     if (data) {
         try {
             historySessions = JSON.parse(data);
@@ -1429,7 +1451,6 @@ function loadLocalHistory() {
     }
 }
 
-// ☁️ 從 Cloud Firestore 載入遠端歷史資料
 async function loadCloudHistory() {
     if (!isCloudConnected || !db) return;
     try {
