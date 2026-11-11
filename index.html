@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統 (V23 補齊指標與公式對照版)</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V24 刪除密碼驗證與全選對比倉版)</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -308,8 +308,8 @@
 <div class="container">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次趨勢對比系統 (V23)</h1>
-            <p>全廠(ALL)對比已補齊全8大指標，並附帶各盤點指標計算公式說明！</p>
+            <h1>📦 盤盈虧彙總與歷次趨勢對比系統 (V24)</h1>
+            <p>已全廠同台頁新增「全選/全不選倉庫」，並加入刪除刪除防護密碼 (1021)！</p>
         </div>
         <div class="header-badges">
             <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
@@ -328,7 +328,7 @@
         <button class="tab-btn" onclick="switchMainTab('allTrend')">🌐 全廠(ALL)與各倉同台對比</button>
         <button class="tab-btn" onclick="switchMainTab('single')">📊 單期各倉別對比</button>
         <button class="tab-btn" onclick="switchMainTab('detail')">📋 品項盤盈虧明細查詢</button>
-        <button class="tab-btn" onclick="switchMainTab('manage')">⚙️ 歷次紀錄管理(可剔除異常期)</button>
+        <button class="tab-btn" onclick="switchMainTab('manage')">⚙️ 歷次紀錄管理(需密碼)</button>
     </div>
 
     <!-- Main Tab 1: 歷次倉別趨勢圖表 -->
@@ -427,6 +427,11 @@
                     <option value="allAmtPct">盤盈虧金額差異%</option>
                     <option value="allAbsAmtPct" selected>盤盈虧金額差異(絕對值)%</option>
                 </select>
+            </div>
+            <!-- 💡 新增的對比倉庫全選/全不選按鈕 -->
+            <div>
+                <button class="upload-btn" style="padding:4px 12px; font-size:0.85rem;" onclick="selectAllCompareWarehouses(true)">全選倉庫</button>
+                <button class="upload-btn" style="padding:4px 12px; font-size:0.85rem; background:#64748b;" onclick="selectAllCompareWarehouses(false)">全不選</button>
             </div>
             <div style="width: 100%;">
                 <label style="font-weight: bold; font-size: 0.85rem; display:block; margin-bottom:4px;">選擇同圖對比的倉庫 (可複選與全廠藍色線重疊)：</label>
@@ -579,16 +584,21 @@
         </div>
     </div>
 
-    <!-- Main Tab 4: 歷次紀錄管理 (含手動剔除功能) -->
+    <!-- Main Tab 4: 歷次紀錄管理 (含手動剔除功能與刪除密碼驗證) -->
     <div id="manageTab" class="card" style="display: none;">
         <h3>📁 歷次盤點紀錄管理與剔除開關</h3>
-        <p style="color:#64748b; font-size:0.9rem;">可在此開關各期狀態。若某天盤點較為異常（如一半倉庫未盤），可直接將其切換為<b>【🔴 已停用 (剔除)】</b>，停用後將不會納入趨勢圖與對比表。</p>
+        <p style="color:#64748b; font-size:0.9rem;">可在此開關各期狀態。若要進行<b>「刪除」</b>操作，必須輸入安全驗證密碼（預設密碼：<b>1021</b>）。</p>
         <div id="historyChipsArea" style="margin-bottom: 20px;"></div>
-        <button class="export-btn" style="background:#ef4444;" onclick="clearAllHistory()">🔥 清除全歷史紀錄</button>
+        <button class="export-btn" style="background:#ef4444;" onclick="clearAllHistory()">🔥 清除全歷史紀錄 (需密碼)</button>
     </div>
 </div>
 
 <script>
+// ==========================================
+// 🔒 刪除防護密碼
+// ==========================================
+const DELETE_PASSWORD = "1021";
+
 // ==========================================
 // 🔑 1. Firebase 初始化設定區塊
 // ==========================================
@@ -1006,6 +1016,13 @@ function selectAllWarehouses(checked) {
     renderTrendChart();
 }
 
+// 💡 新增：全廠同台對比頁面的「全選 / 全不選倉庫」功能
+function selectAllCompareWarehouses(checked) {
+    const checkboxes = document.querySelectorAll('#allWhCompareCheckboxContainer input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = checked);
+    renderAllTrendChart();
+}
+
 function renderTrendChart() {
     const activeSessions = historySessions.filter(s => s.enabled !== false);
     if (activeSessions.length === 0) return;
@@ -1072,7 +1089,6 @@ function renderTrendChart() {
     });
 }
 
-// 💡 渲染全廠 (ALL) 與 指定倉別 同圖重疊對比圖 (完整8指標版)
 function renderAllTrendChart() {
     const activeSessions = historySessions.filter(s => s.enabled !== false);
     if (activeSessions.length === 0) return;
@@ -1231,7 +1247,7 @@ function renderMatrixTable() {
             if (!item) item = s.warehouseSummary.find(w => w.warehouse.includes(whName) || whName.includes(w.warehouse));
 
             let valStr = "-";
-            if (item && (item.count > 0 || item.stockQty > 0)) {
+            if (item && (item.count === 0 || item.stockQty > 0)) {
                 if (metric === 'diffAmt') valStr = fmtInt(item.diffAmt);
                 else if (metric === 'absDiffAmt') valStr = fmtInt(item.absDiffAmt);
                 else if (metric === 'diffQty') valStr = fmtNum(item.diffQty);
@@ -1414,34 +1430,52 @@ function toggleSessionEnabled(id) {
     }
 }
 
+// 💡 刪除單期紀錄 (需輸入密碼 1021)
 function removeHistorySession(id) {
-    historySessions = historySessions.filter(s => s.id !== id);
-    saveLocalHistory();
-    if (isCloudConnected && db) {
-        db.collection("inventory_history").doc(id).delete()
-            .catch(err => console.error("雲端刪除失敗:", err));
+    const pwd = prompt("🔒 刪除紀錄為敏感操作，請輸入管理密碼：");
+    if (pwd === null) return; // 使用者點擊取消
+
+    if (pwd === DELETE_PASSWORD) {
+        historySessions = historySessions.filter(s => s.id !== id);
+        saveLocalHistory();
+        if (isCloudConnected && db) {
+            db.collection("inventory_history").doc(id).delete()
+                .catch(err => console.error("雲端刪除失敗:", err));
+        }
+        updateUI();
+        alert("✅ 該期紀錄已成功刪除！");
+    } else {
+        alert("❌ 密碼錯誤！無法刪除紀錄。");
     }
-    updateUI();
 }
 
+// 💡 清除全歷史紀錄 (需輸入密碼 1021)
 function clearAllHistory() {
-    if (confirm("確定要清除所有盤點歷史紀錄嗎？")) {
-        historySessions = [];
-        localStorage.removeItem("inventory_history_v23");
-        updateUI();
+    const pwd = prompt("🔥 警告！這將清除【所有】盤點歷史紀錄，請輸入管理密碼確認：");
+    if (pwd === null) return;
+
+    if (pwd === DELETE_PASSWORD) {
+        if (confirm("最後確認：確定要徹底清空所有數據嗎？")) {
+            historySessions = [];
+            localStorage.removeItem("inventory_history_v24");
+            updateUI();
+            alert("✅ 所有歷史紀錄已完全清空。");
+        }
+    } else {
+        alert("❌ 密碼錯誤！取消清空操作。");
     }
 }
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v23", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v24", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v23");
+    const data = localStorage.getItem("inventory_history_v24");
     if (data) {
         try {
             historySessions = JSON.parse(data);
