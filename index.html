@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統 (V17 專治圖三深色標題與貨幣符號版)</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V18 多檔批次上傳完美解析版)</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -299,8 +299,8 @@
 <div class="container">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V17)</h1>
-            <p>已極限防護：支援圖二(原始 Excel) 與 圖三(美化檔/深色標題/帶$符號) 雙重模式！</p>
+            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V18)</h1>
+            <p>已解鎖多檔案批次拖曳上傳與不覆蓋儲存機制，完美支援一次載入所有歷史盤點表！</p>
         </div>
         <div class="header-badges">
             <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
@@ -309,9 +309,9 @@
     </header>
 
     <div class="upload-section" id="dropZone">
-        <p style="margin: 0; font-size: 1rem; color: #475569;">拖曳 Excel 盤點表至此處（支援原始明細檔或匯出之彙總表，可一次上傳多檔）</p>
+        <p style="margin: 0; font-size: 1rem; color: #475569;">拖曳多個 Excel 盤點表至此處（支援一次勾選全部歷史檔案批量上傳）</p>
         <input type="file" id="fileInput" accept=".xlsx, .xls" multiple style="display: none;">
-        <button class="upload-btn" onclick="document.getElementById('fileInput').click()">選擇 Excel 檔案 (可複選)</button>
+        <button class="upload-btn" onclick="document.getElementById('fileInput').click()">選擇 Excel 檔案 (可多選)</button>
     </div>
 
     <div class="tabs">
@@ -538,33 +538,35 @@ window.addEventListener('DOMContentLoaded', () => {
     loadLocalHistory();
 });
 
-function handleFiles(files) {
-    let promises = [];
+// 💡 V18 多檔案串行安全讀取
+async function handleFiles(files) {
     for (let i = 0; i < files.length; i++) {
-        promises.push(readFileAsync(files[i]));
+        await readFileAsync(files[i]);
     }
-    Promise.all(promises).then(() => {
-        saveLocalHistory();
-        updateUI();
-    });
+    saveLocalHistory();
+    updateUI();
 }
 
 function readFileAsync(file) {
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = function(e) {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-            
-            let targetSheetName = workbook.SheetNames.find(name => name.includes('明細') || name.includes('彙總'));
-            if (!targetSheetName) {
-                targetSheetName = workbook.SheetNames[0];
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                
+                let targetSheetName = workbook.SheetNames.find(name => name.includes('明細') || name.includes('彙總'));
+                if (!targetSheetName) {
+                    targetSheetName = workbook.SheetNames[0];
+                }
+                
+                const sheet = workbook.Sheets[targetSheetName];
+                const json = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+                
+                parseSheetData(json, file.name);
+            } catch (err) {
+                console.error("解析檔案錯誤:", file.name, err);
             }
-            
-            const sheet = workbook.Sheets[targetSheetName];
-            const json = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
-            
-            parseSheetData(json, file.name);
             resolve();
         };
         reader.readAsArrayBuffer(file);
@@ -582,7 +584,6 @@ function formatMMDD(dateStr) {
     return dateStr.replace(/[^0-9]/g, '');
 }
 
-// 💡 V17 強效轉數字：徹底清洗 $、NT$、逗點、多餘文字
 function cleanVal(v) {
     if (v === null || v === undefined) return 0;
     const str = String(v).replace(/[\$,\s\tNT]/g, '');
@@ -594,12 +595,10 @@ function parseSheetData(rows, fileName) {
     let rawData = [];
     let headerIdx = -1;
 
-    // 💡 V17 標頭檢索：從第0列開始搜尋
     for (let i = 0; i < Math.min(rows.length, 30); i++) {
         if (!rows[i]) continue;
         const rowStr = rows[i].map(c => String(c || '').replace(/\s+/g, '')).join(',');
         
-        // 只要包含「倉庫」或「品項代號/名稱」並且包含「數量」或「金額」即可認定為標頭
         const hasItemOrWh = rowStr.includes('倉庫') || rowStr.includes('倉別') || rowStr.includes('品項') || rowStr.includes('品類');
         const hasDataCol = rowStr.includes('庫存') || rowStr.includes('盤點') || rowStr.includes('成本') || rowStr.includes('金額') || rowStr.includes('盤盈虧') || rowStr.includes('差異');
 
@@ -610,15 +609,13 @@ function parseSheetData(rows, fileName) {
     }
 
     if (headerIdx === -1) {
-        alert(`無法解析檔案 ${fileName}！\n請確認檔案中是否包含正確的標題列（例如：品項代號、倉庫、庫存數量、單位成本等）。`);
+        console.warn(`無法解析檔案 ${fileName}`);
         return;
     }
 
     const rawHeaders = rows[headerIdx];
-    // 清理標頭字串：移除多餘換行符號
     const headers = rawHeaders.map(h => String(h || '').replace(/[\r\n\s]+/g, '').trim());
 
-    // 💡 關鍵字動態比對
     const getCol = (keywords) => headers.findIndex(h => keywords.some(kw => h.includes(kw)));
 
     const cDate = getCol(['盤點日期', '日期']);
@@ -647,11 +644,9 @@ function parseSheetData(rows, fileName) {
         const codeStr = cCode !== -1 && row[cCode] ? String(row[cCode]).trim() : '';
         const whStr = cWH !== -1 && row[cWH] ? String(row[cWH]).trim() : '';
 
-        // 💡 圖三相容：如果完全找不到商品代號、名稱和倉庫，才視為無效行
         if (!nameStr && !codeStr && !whStr) continue;
         if (whStr === '倉庫' || whStr.includes('ALL') || whStr.includes('合計') || whStr.includes('總計')) continue;
 
-        // 繼承日期與單號 (因應 Excel 上下合併儲存格)
         let dVal = cDate !== -1 && row[cDate] ? String(row[cDate]).trim() : '';
         if (dVal) lastValidDate = dVal;
         else dVal = lastValidDate;
@@ -661,7 +656,6 @@ function parseSheetData(rows, fileName) {
         if (noVal) lastValidNo = noVal;
         else noVal = lastValidNo;
 
-        // 數據清洗提取
         const stockQty = cStockQty !== -1 ? cleanVal(row[cStockQty]) : 0;
         const checkQty = cCheckQty !== -1 ? cleanVal(row[cCheckQty]) : 0;
         let diffQty = cDiffQty !== -1 ? cleanVal(row[cDiffQty]) : (checkQty - stockQty);
@@ -670,16 +664,9 @@ function parseSheetData(rows, fileName) {
         let diffAmt = cDiffAmt !== -1 ? cleanVal(row[cDiffAmt]) : 0;
         let stockAmt = cStockAmt !== -1 ? cleanVal(row[cStockAmt]) : 0;
 
-        // 💡 自動補全邏輯（避免某欄位遺漏）
-        if (cost === 0 && stockQty !== 0 && stockAmt !== 0) {
-            cost = stockAmt / stockQty;
-        }
-        if (diffAmt === 0 && diffQty !== 0 && cost !== 0) {
-            diffAmt = diffQty * cost;
-        }
-        if (stockAmt === 0 && stockQty !== 0 && cost !== 0) {
-            stockAmt = stockQty * cost;
-        }
+        if (cost === 0 && stockQty !== 0 && stockAmt !== 0) cost = stockAmt / stockQty;
+        if (diffAmt === 0 && diffQty !== 0 && cost !== 0) diffAmt = diffQty * cost;
+        if (stockAmt === 0 && stockQty !== 0 && cost !== 0) stockAmt = stockQty * cost;
 
         rawData.push({
             date: dVal,
@@ -702,9 +689,10 @@ function parseSheetData(rows, fileName) {
     let detectedInventoryDateStr = "";
     let dateFileNameSegment = "";
 
+    const cleanFileName = fileName.replace(/\.[^/.]+$/, "").replace("盤盈虧彙總表", "").trim();
+
     if (sortedDates.length === 0) {
-        const match = fileName.match(/\d{4}_\d{4}|\d{4}/);
-        detectedInventoryDateStr = match ? match[0] : fileName.replace(/\.[^/.]+$/, "").replace("盤盈虧彙總表", "期別 ");
+        detectedInventoryDateStr = cleanFileName || "未知期別";
         dateFileNameSegment = detectedInventoryDateStr;
     } else if (sortedDates.length === 1) {
         detectedInventoryDateStr = sortedDates[0];
@@ -714,11 +702,16 @@ function parseSheetData(rows, fileName) {
         dateFileNameSegment = `${formatMMDD(sortedDates[0])}_${formatMMDD(sortedDates[sortedDates.length - 1])}`;
     }
 
+    // 💡 V18 多檔獨立識別碼：加上檔名作為唯一Key，防止同日期檔案被覆蓋
+    const sessionKey = `${detectedInventoryDateStr} (${cleanFileName})`;
     const summaryRes = computeWarehouseSummary(rawData);
-    const existingIdx = historySessions.findIndex(s => s.dateStr === detectedInventoryDateStr);
+    
+    const existingIdx = historySessions.findIndex(s => s.sessionKey === sessionKey || s.id === fileName);
     const sessionObj = {
-        id: existingIdx !== -1 ? historySessions[existingIdx].id : 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2,4),
+        id: 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2,4),
+        sessionKey: sessionKey,
         dateStr: detectedInventoryDateStr,
+        fileName: fileName,
         fileNameSeg: dateFileNameSegment,
         rawData: rawData,
         warehouseSummary: summaryRes.warehouseSummary,
@@ -801,6 +794,10 @@ function updateUI() {
         return;
     }
 
+    if (!selectedSessionId || !historySessions.some(s => s.id === selectedSessionId)) {
+        selectedSessionId = historySessions[historySessions.length - 1].id;
+    }
+
     updateDropdowns();
     initWarehouseCheckboxes();
     renderTrendChart();
@@ -817,15 +814,16 @@ function updateDropdowns() {
     detailSelect.innerHTML = '';
 
     historySessions.forEach(s => {
+        const title = `📅 ${s.dateStr} [${s.fileName}]`;
         const opt1 = document.createElement('option');
         opt1.value = s.id;
-        opt1.textContent = `📅 盤點期別：${s.dateStr}`;
+        opt1.textContent = title;
         if (s.id === selectedSessionId) opt1.selected = true;
         singleSelect.appendChild(opt1);
 
         const opt2 = document.createElement('option');
         opt2.value = s.id;
-        opt2.textContent = `📅 明細期別：${s.dateStr}`;
+        opt2.textContent = title;
         if (s.id === selectedSessionId) opt2.selected = true;
         detailSelect.appendChild(opt2);
     });
@@ -957,11 +955,7 @@ function diagnoseHistoryData() {
     out.innerText = "=== 歷史資料診斷訊息 ===\n";
     out.innerText += `已載入期數: ${historySessions.length}\n`;
     historySessions.forEach((s, i) => {
-        out.innerText += `\n[期別 ${i+1}] ID: ${s.id} | 日期: ${s.dateStr} | 明細筆數: ${s.rawData.length}\n`;
-        out.innerText += `倉別統計列表:\n`;
-        s.warehouseSummary.forEach(w => {
-            out.innerText += `  - 倉別: "${w.warehouse}" | 筆數: ${w.count} | 盤差金額: ${w.diffAmt}\n`;
-        });
+        out.innerText += `\n[期別 ${i+1}] ID: ${s.id} | 日期: ${s.dateStr} | 檔名: ${s.fileName} | 明細筆數: ${s.rawData.length}\n`;
     });
 }
 
@@ -1090,7 +1084,7 @@ function renderHistoryChips() {
     historySessions.forEach((s, idx) => {
         const div = document.createElement('div');
         div.className = 'history-chip';
-        div.innerHTML = `📅 期別 ${idx + 1}: <strong>${s.dateStr}</strong> (${s.rawData.length}筆) <span class="remove-chip" onclick="removeHistorySession('${s.id}')">✕</span>`;
+        div.innerHTML = `📅 期別 ${idx + 1}: <strong>${s.dateStr}</strong> (${s.fileName}) <span class="remove-chip" onclick="removeHistorySession('${s.id}')">✕</span>`;
         container.appendChild(div);
     });
 }
@@ -1104,21 +1098,21 @@ function removeHistorySession(id) {
 function clearAllHistory() {
     if (confirm("確定要清除所有盤點歷史紀錄嗎？")) {
         historySessions = [];
-        localStorage.removeItem("inventory_history_v17");
+        localStorage.removeItem("inventory_history_v18");
         updateUI();
     }
 }
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v17", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v18", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v17");
+    const data = localStorage.getItem("inventory_history_v18");
     if (data) {
         try {
             historySessions = JSON.parse(data);
