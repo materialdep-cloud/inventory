@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統 (V16 金額欄位標頭精準解析版)</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V17 專治圖三深色標題與貨幣符號版)</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -299,8 +299,8 @@
 <div class="container">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V16)</h1>
-            <p>已修復抬頭標題防誤判機制，精準對應：單位成本、盤盈虧金/額、庫存金額！</p>
+            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V17)</h1>
+            <p>已極限防護：支援圖二(原始 Excel) 與 圖三(美化檔/深色標題/帶$符號) 雙重模式！</p>
         </div>
         <div class="header-badges">
             <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
@@ -556,7 +556,7 @@ function readFileAsync(file) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array', cellDates: true });
             
-            let targetSheetName = workbook.SheetNames.find(name => name.includes('明細'));
+            let targetSheetName = workbook.SheetNames.find(name => name.includes('明細') || name.includes('彙總'));
             if (!targetSheetName) {
                 targetSheetName = workbook.SheetNames[0];
             }
@@ -582,10 +582,10 @@ function formatMMDD(dateStr) {
     return dateStr.replace(/[^0-9]/g, '');
 }
 
-// 通用轉數字函數，清除貨幣符號、逗號與多餘空白
+// 💡 V17 強效轉數字：徹底清洗 $、NT$、逗點、多餘文字
 function cleanVal(v) {
     if (v === null || v === undefined) return 0;
-    const str = String(v).replace(/[\$,\s\t]/g, '');
+    const str = String(v).replace(/[\$,\s\tNT]/g, '');
     const num = parseFloat(str);
     return isNaN(num) ? 0 : num;
 }
@@ -594,13 +594,14 @@ function parseSheetData(rows, fileName) {
     let rawData = [];
     let headerIdx = -1;
 
-    // 💡 V16 防誤判機制：必須同時具有品項/倉庫欄位與數量/金額欄位，確保避開大標題
+    // 💡 V17 標頭檢索：從第0列開始搜尋
     for (let i = 0; i < Math.min(rows.length, 30); i++) {
         if (!rows[i]) continue;
         const rowStr = rows[i].map(c => String(c || '').replace(/\s+/g, '')).join(',');
         
+        // 只要包含「倉庫」或「品項代號/名稱」並且包含「數量」或「金額」即可認定為標頭
         const hasItemOrWh = rowStr.includes('倉庫') || rowStr.includes('倉別') || rowStr.includes('品項') || rowStr.includes('品類');
-        const hasDataCol = rowStr.includes('庫存') || rowStr.includes('盤點') || rowStr.includes('成本') || rowStr.includes('金額') || rowStr.includes('盤盈虧');
+        const hasDataCol = rowStr.includes('庫存') || rowStr.includes('盤點') || rowStr.includes('成本') || rowStr.includes('金額') || rowStr.includes('盤盈虧') || rowStr.includes('差異');
 
         if (hasItemOrWh && hasDataCol) {
             headerIdx = i;
@@ -609,15 +610,15 @@ function parseSheetData(rows, fileName) {
     }
 
     if (headerIdx === -1) {
-        alert(`無法解析檔案 ${fileName}！\n請確認檔案中是否包含正確的標題列（如：品項名稱、倉庫、庫存數量等）。`);
+        alert(`無法解析檔案 ${fileName}！\n請確認檔案中是否包含正確的標題列（例如：品項代號、倉庫、庫存數量、單位成本等）。`);
         return;
     }
 
     const rawHeaders = rows[headerIdx];
-    // 清理標頭，移除內部所有換行符與無效空白
+    // 清理標頭字串：移除多餘換行符號
     const headers = rawHeaders.map(h => String(h || '').replace(/[\r\n\s]+/g, '').trim());
 
-    // 💡 V16 多重關鍵字比對
+    // 💡 關鍵字動態比對
     const getCol = (keywords) => headers.findIndex(h => keywords.some(kw => h.includes(kw)));
 
     const cDate = getCol(['盤點日期', '日期']);
@@ -629,40 +630,38 @@ function parseSheetData(rows, fileName) {
     const cWH = getCol(['倉庫', '倉別', 'ＡＬＬ', 'ALL']);
     const cStockQty = getCol(['庫存數量', '庫存數']);
     const cCheckQty = getCol(['盤點數量', '盤點數', '實盤數']);
-    
-    // 💡 精準支援：盤盈虧數量 / 盤盈虧數 / 數量差異 / 盤差數量
     const cDiffQty = getCol(['盤盈虧數量', '盤盈虧數', '數量差異', '盤差數量']);
-    
-    // 💡 精準支援：單位成本 / 單價 / 成本
     const cCost = getCol(['單位成本', '單價', '成本']);
-    
-    // 💡 精準支援：盤盈虧金額 / 盤盈虧金 / 金額差異 / 盤差金額
     const cDiffAmt = getCol(['盤盈虧金額', '盤盈虧金', '金額差異', '盤差金額']);
-    
-    // 💡 精準支援：庫存金額 / 庫存金額($) / 庫存總額
     const cStockAmt = getCol(['庫存金額', '庫存總額']);
 
     const dateSet = new Set();
     let lastValidDate = "";
+    let lastValidNo = "";
 
     for (let i = headerIdx + 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row.length === 0) continue;
 
-        const wh = cWH !== -1 && row[cWH] ? String(row[cWH]).trim() : '';
-        if (!wh || wh === '倉庫' || wh.includes('ALL') || wh.includes('合計') || wh.includes('總計')) continue;
+        const nameStr = cName !== -1 && row[cName] ? String(row[cName]).trim() : '';
+        const codeStr = cCode !== -1 && row[cCode] ? String(row[cCode]).trim() : '';
+        const whStr = cWH !== -1 && row[cWH] ? String(row[cWH]).trim() : '';
 
-        const code = cCode !== -1 && row[cCode] ? String(row[cCode]).trim() : '';
-        
+        // 💡 圖三相容：如果完全找不到商品代號、名稱和倉庫，才視為無效行
+        if (!nameStr && !codeStr && !whStr) continue;
+        if (whStr === '倉庫' || whStr.includes('ALL') || whStr.includes('合計') || whStr.includes('總計')) continue;
+
+        // 繼承日期與單號 (因應 Excel 上下合併儲存格)
         let dVal = cDate !== -1 && row[cDate] ? String(row[cDate]).trim() : '';
-        if (dVal) {
-            lastValidDate = dVal;
-        } else {
-            dVal = lastValidDate;
-        }
+        if (dVal) lastValidDate = dVal;
+        else dVal = lastValidDate;
         if (dVal) dateSet.add(dVal);
 
-        // 使用 cleanVal 強效轉數值
+        let noVal = cNo !== -1 && row[cNo] ? String(row[cNo]).trim() : '';
+        if (noVal) lastValidNo = noVal;
+        else noVal = lastValidNo;
+
+        // 數據清洗提取
         const stockQty = cStockQty !== -1 ? cleanVal(row[cStockQty]) : 0;
         const checkQty = cCheckQty !== -1 ? cleanVal(row[cCheckQty]) : 0;
         let diffQty = cDiffQty !== -1 ? cleanVal(row[cDiffQty]) : (checkQty - stockQty);
@@ -671,7 +670,7 @@ function parseSheetData(rows, fileName) {
         let diffAmt = cDiffAmt !== -1 ? cleanVal(row[cDiffAmt]) : 0;
         let stockAmt = cStockAmt !== -1 ? cleanVal(row[cStockAmt]) : 0;
 
-        // 💡 若只有其中一項數據，自動以公式補齊相依數值
+        // 💡 自動補全邏輯（避免某欄位遺漏）
         if (cost === 0 && stockQty !== 0 && stockAmt !== 0) {
             cost = stockAmt / stockQty;
         }
@@ -684,12 +683,12 @@ function parseSheetData(rows, fileName) {
 
         rawData.push({
             date: dVal,
-            no: cNo !== -1 ? row[cNo] || '' : '',
+            no: noVal,
             category: cCategory !== -1 ? row[cCategory] || '' : '',
-            code: code,
-            name: cName !== -1 ? row[cName] || '' : '',
+            code: codeStr,
+            name: nameStr,
             unit: cUnit !== -1 ? row[cUnit] || '' : '',
-            warehouse: wh,
+            warehouse: whStr,
             stockQty: stockQty,
             checkQty: checkQty,
             diffQty: diffQty,
@@ -1105,21 +1104,21 @@ function removeHistorySession(id) {
 function clearAllHistory() {
     if (confirm("確定要清除所有盤點歷史紀錄嗎？")) {
         historySessions = [];
-        localStorage.removeItem("inventory_history_v16");
+        localStorage.removeItem("inventory_history_v17");
         updateUI();
     }
 }
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v16", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v17", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v16");
+    const data = localStorage.getItem("inventory_history_v17");
     if (data) {
         try {
             historySessions = JSON.parse(data);
