@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統 (V20 新增全廠ALL趨勢圖與自動過濾特定倉版)</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V21 全廠與倉別同圖對比 & 異常期別手動剔除版)</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -22,7 +22,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: -apple-system, BlinkFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
@@ -244,22 +244,29 @@
             gap: 6px;
         }
 
-        .history-chip {
-            background: #e2e8f0;
-            padding: 6px 14px;
-            border-radius: 16px;
-            font-size: 0.88rem;
+        .history-card-item {
+            background: #ffffff;
+            padding: 12px 18px;
+            border-radius: 10px;
+            font-size: 0.9rem;
             display: flex;
             align-items: center;
-            gap: 8px;
+            justify-content: space-between;
             border: 1px solid #cbd5e1;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
-        .history-chip .remove-chip {
-            cursor: pointer;
-            color: #ef4444;
+
+        .toggle-active-btn {
+            padding: 4px 12px;
+            border-radius: 14px;
+            font-size: 0.8rem;
             font-weight: bold;
+            cursor: pointer;
+            border: none;
         }
+        .btn-status-enabled { background-color: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+        .btn-status-disabled { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
 
         .chart-controls {
             display: flex;
@@ -299,8 +306,8 @@
 <div class="container">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次趨勢對比系統 (V20)</h1>
-            <p>已剔除產地包材倉/驗證包材倉，並新增「全廠 ALL 總體跨期 KPI 曲線圖」！</p>
+            <h1>📦 盤盈虧彙總與歷次趨勢對比系統 (V21)</h1>
+            <p>已實現：全廠 KPI 與各倉同圖對比，以及異常盤點期別「手動剔除/啟用」開關！</p>
         </div>
         <div class="header-badges">
             <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
@@ -316,10 +323,10 @@
 
     <div class="tabs">
         <button class="tab-btn active" onclick="switchMainTab('trend')">📈 歷次倉別趨勢圖表</button>
-        <button class="tab-btn" onclick="switchMainTab('allTrend')">🌐 全廠(ALL) 總體 KPI 趨勢</button>
+        <button class="tab-btn" onclick="switchMainTab('allTrend')">🌐 全廠(ALL)與各倉同台對比</button>
         <button class="tab-btn" onclick="switchMainTab('single')">📊 單期各倉別對比</button>
         <button class="tab-btn" onclick="switchMainTab('detail')">📋 品項盤盈虧明細查詢</button>
-        <button class="tab-btn" onclick="switchMainTab('manage')">⚙️ 歷次紀錄管理</button>
+        <button class="tab-btn" onclick="switchMainTab('manage')">⚙️ 歷次紀錄管理(可剔除異常期)</button>
     </div>
 
     <!-- Main Tab 1: 歷次倉別趨勢圖表 -->
@@ -362,7 +369,7 @@
             <canvas id="trendChartCanvas"></canvas>
         </div>
 
-        <h4 style="margin-bottom: 10px;">📊 歷次對比矩陣數據表</h4>
+        <h4 style="margin-bottom: 10px;">📊 歷次對比矩陣數據表 (已自動過濾「停用期別」)</h4>
         <div class="table-responsive">
             <table class="sheet-table" id="historyMatrixTable">
                 <thead>
@@ -376,19 +383,18 @@
             </table>
         </div>
 
-        <!-- 診斷訊息視窗 -->
         <pre id="debugOutput" style="display:none; background:#1e293b; color:#38bdf8; padding:15px; border-radius:8px; font-size:0.85rem; overflow-x:auto; margin-top:16px;"></pre>
     </div>
 
-    <!-- Main Tab 1.5: 全廠 ALL 總體跨期趨勢 -->
+    <!-- Main Tab 1.5: 全廠 ALL 總體與特定倉別同台趨勢 -->
     <div id="allTrendTab" class="card" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <h3 style="margin:0;">🌐 全廠 (ALL) 歷次盤點 KPI 指標對比曲線圖</h3>
+            <h3 style="margin:0;">🌐 全廠 (ALL) 與 指定倉別 跨期 KPI 重疊對比圖</h3>
         </div>
 
         <div class="chart-controls">
             <div>
-                <label style="font-weight: bold; font-size: 0.9rem;">全廠 ALL 指標切換：</label>
+                <label style="font-weight: bold; font-size: 0.9rem;">全廠 KPI 對比指標：</label>
                 <select id="allMetricSelect" onchange="renderAllTrendChart()">
                     <option value="allQtyPct">盤盈虧數量%</option>
                     <option value="allAbsQtyPct">盤盈虧數量(絕對值)%</option>
@@ -398,18 +404,25 @@
                     <option value="allAbsDiffAmt">盤盈虧金額(絕對值) ($)</option>
                 </select>
             </div>
+            <div style="width: 100%;">
+                <label style="font-weight: bold; font-size: 0.85rem; display:block; margin-bottom:4px;">選擇同圖對比的倉庫 (可複選與全廠藍色線重疊)：</label>
+                <div class="wh-checkbox-group" id="allWhCompareCheckboxContainer">
+                    <span style="color:#94a3b8; font-size:0.85rem;">請先上傳 Excel 盤點表資料...</span>
+                </div>
+            </div>
         </div>
 
         <div style="position: relative; height:480px; width:100%; margin-bottom: 24px;">
             <canvas id="allTrendChartCanvas"></canvas>
         </div>
 
-        <h4 style="margin-bottom: 10px;">📋 全廠 (ALL) 歷次 KPI 總表數據</h4>
+        <h4 style="margin-bottom: 10px;">📋 全廠 (ALL) 歷次 KPI 總表數據 (包含停用與啟用狀態標示)</h4>
         <div class="table-responsive">
             <table class="sheet-table" id="allKpiMatrixTable">
                 <thead>
                     <tr>
                         <th>盤點期別</th>
+                        <th>狀態</th>
                         <th>盤盈虧數量%</th>
                         <th>盤盈虧數量(絕對值)%</th>
                         <th>盤盈虧金額%</th>
@@ -419,7 +432,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr><td colspan="7" style="text-align:center; color:#94a3b8;">尚無歷史盤點資料</td></tr>
+                    <tr><td colspan="8" style="text-align:center; color:#94a3b8;">尚無歷史盤點資料</td></tr>
                 </tbody>
             </table>
         </div>
@@ -542,11 +555,11 @@
         </div>
     </div>
 
-    <!-- Main Tab 4: 歷次紀錄管理 -->
+    <!-- Main Tab 4: 歷次紀錄管理 (含手動剔除功能) -->
     <div id="manageTab" class="card" style="display: none;">
-        <h3>📁 已載入之盤點期數紀錄</h3>
-        <p style="color:#64748b; font-size:0.9rem;">下表列出目前儲存在本機的所有盤點期別，可刪除異常或重複記錄。</p>
-        <div class="history-list" id="historyChipsArea"></div>
+        <h3>📁 歷次盤點紀錄管理與剔除開關</h3>
+        <p style="color:#64748b; font-size:0.9rem;">可在此開關各期狀態。若某天盤點較為異常（如一半倉庫未盤），可直接將其切換為<b>【🔴 已停用 (剔除)】</b>，停用後將不會納入趨勢圖與對比表。</p>
+        <div id="historyChipsArea" style="margin-bottom: 20px;"></div>
         <button class="export-btn" style="background:#ef4444;" onclick="clearAllHistory()">🔥 清除全歷史紀錄</button>
     </div>
 </div>
@@ -557,14 +570,12 @@ let selectedSessionId = null;
 let trendChartObj = null;
 let allTrendChartObj = null;
 
-// 💡 預設倉庫清單（已去除 產地包材倉 與 驗證包材倉）
 const defaultWhOrder = [
     "綠園二廠/總倉", "綠園二廠/包材倉", "綠園二廠/待處理倉", "包裝/成品倉", "包裝/原料倉", "包裝/原料倉(包材)",
     "63-7倉", "63-6倉/上層", "63-5倉/常溫料架區", "63-7倉/待處理倉", "車棚1倉/包材倉", 
     "車棚2倉/久儲包材倉", "63-5倉/低溫倉", "63-6倉/下層/理貨倉", "理貨倉(包材)", "63-6倉/下層/直腳倉", "綠園二廠/常溫區"
 ];
 
-// 💡 需自動排除的倉庫名稱關鍵字
 const excludedWarehouses = ["產地包材倉", "驗證包材倉"];
 
 const chartColors = [
@@ -699,7 +710,6 @@ function parseSheetData(rows, fileName) {
         if (!nameStr && !codeStr && !whStr) continue;
         if (whStr === '倉庫' || whStr.includes('ALL') || whStr.includes('合計') || whStr.includes('總計')) continue;
 
-        // 💡 剔除「產地包材倉」與「驗證包材倉」
         if (excludedWarehouses.some(ex => whStr.includes(ex))) continue;
 
         let dVal = cDate !== -1 && row[cDate] ? String(row[cDate]).trim() : '';
@@ -767,6 +777,7 @@ function parseSheetData(rows, fileName) {
         dateStr: detectedInventoryDateStr,
         fileName: fileName,
         fileNameSeg: dateFileNameSegment,
+        enabled: true, // 💡 預設為啟用
         rawData: rawData,
         warehouseSummary: summaryRes.warehouseSummary,
         overallKPI: summaryRes.overallKPI
@@ -845,10 +856,12 @@ function computeWarehouseSummary(rawData) {
 }
 
 function updateUI() {
-    document.getElementById('sessionCountBadge').innerText = `已載入期數：${historySessions.length} 期`;
+    const activeSessions = historySessions.filter(s => s.enabled !== false);
+    document.getElementById('sessionCountBadge').innerText = `已載入期數：${historySessions.length} 期 (啟用 ${activeSessions.length} 期)`;
 
     if (historySessions.length === 0) {
         document.getElementById('whCheckboxContainer').innerHTML = '<span style="color:#94a3b8; font-size:0.85rem;">尚無歷史資料，請先上傳 Excel...</span>';
+        document.getElementById('allWhCompareCheckboxContainer').innerHTML = '<span style="color:#94a3b8; font-size:0.85rem;">尚無歷史資料，請先上傳 Excel...</span>';
         return;
     }
 
@@ -874,7 +887,8 @@ function updateDropdowns() {
     detailSelect.innerHTML = '';
 
     historySessions.forEach(s => {
-        const title = `📅 ${s.dateStr} [${s.fileName}]`;
+        const disabledTag = s.enabled === false ? ' [已停用]' : '';
+        const title = `📅 ${s.dateStr} [${s.fileName}]${disabledTag}`;
         const opt1 = document.createElement('option');
         opt1.value = s.id;
         opt1.textContent = title;
@@ -891,14 +905,25 @@ function updateDropdowns() {
 
 function initWarehouseCheckboxes() {
     const container = document.getElementById('whCheckboxContainer');
+    const allCompareContainer = document.getElementById('allWhCompareCheckboxContainer');
+    
     container.innerHTML = '';
+    allCompareContainer.innerHTML = '';
+
     const allWhs = getAllWarehouseNames();
 
     allWhs.forEach((whName, idx) => {
-        const label = document.createElement('label');
-        label.className = 'wh-checkbox-item';
-        label.innerHTML = `<input type="checkbox" value="${whName}" checked onchange="renderTrendChart()"> <span style="color:${chartColors[idx % chartColors.length]}; font-weight:bold;">■</span> ${whName}`;
-        container.appendChild(label);
+        const color = chartColors[idx % chartColors.length];
+        
+        const label1 = document.createElement('label');
+        label1.className = 'wh-checkbox-item';
+        label1.innerHTML = `<input type="checkbox" value="${whName}" checked onchange="renderTrendChart()"> <span style="color:${color}; font-weight:bold;">■</span> ${whName}`;
+        container.appendChild(label1);
+
+        const label2 = document.createElement('label');
+        label2.className = 'wh-checkbox-item';
+        label2.innerHTML = `<input type="checkbox" value="${whName}" onchange="renderAllTrendChart()"> <span style="color:${color}; font-weight:bold;">■</span> ${whName}`;
+        allCompareContainer.appendChild(label2);
     });
 }
 
@@ -909,19 +934,20 @@ function selectAllWarehouses(checked) {
 }
 
 function renderTrendChart() {
-    if (historySessions.length === 0) return;
+    const activeSessions = historySessions.filter(s => s.enabled !== false);
+    if (activeSessions.length === 0) return;
 
     const metric = document.getElementById('metricSelect').value;
     const checkedBoxes = Array.from(document.querySelectorAll('#whCheckboxContainer input[type="checkbox"]:checked')).map(cb => cb.value);
 
-    const labels = historySessions.map(s => s.dateStr);
+    const labels = activeSessions.map(s => s.dateStr);
     const datasets = [];
     const allWhs = getAllWarehouseNames();
 
     allWhs.forEach((whName, idx) => {
         if (!checkedBoxes.includes(whName)) return;
 
-        const dataPoints = historySessions.map(s => {
+        const dataPoints = activeSessions.map(s => {
             let item = s.warehouseSummary.find(w => w.warehouse.trim() === whName.trim());
             if (!item) {
                 item = s.warehouseSummary.find(w => w.warehouse.includes(whName) || whName.includes(w.warehouse));
@@ -973,12 +999,15 @@ function renderTrendChart() {
     });
 }
 
-// 💡 渲染全廠 (ALL) KPI 趨勢曲線圖
+// 💡 渲染全廠 (ALL) 與 指定倉別 同圖重疊對比圖
 function renderAllTrendChart() {
-    if (historySessions.length === 0) return;
+    const activeSessions = historySessions.filter(s => s.enabled !== false);
+    if (activeSessions.length === 0) return;
 
     const metric = document.getElementById('allMetricSelect').value;
-    const labels = historySessions.map(s => s.dateStr);
+    const checkedBoxes = Array.from(document.querySelectorAll('#allWhCompareCheckboxContainer input[type="checkbox"]:checked')).map(cb => cb.value);
+
+    const labels = activeSessions.map(s => s.dateStr);
 
     const metricLabels = {
         'allQtyPct': '盤盈虧數量%',
@@ -989,7 +1018,8 @@ function renderAllTrendChart() {
         'allAbsDiffAmt': '盤盈虧金額(絕對值) ($)'
     };
 
-    const dataPoints = historySessions.map(s => {
+    // 1. 全廠藍色主線
+    const allDataPoints = activeSessions.map(s => {
         const kpi = s.overallKPI;
         if (metric === 'allQtyPct') return kpi.totalStockQty ? (kpi.totalDiffQty / kpi.totalStockQty) * 100 : 0;
         if (metric === 'allAbsQtyPct') return kpi.totalStockQty ? (kpi.totalAbsDiffQty / kpi.totalStockQty) * 100 : 0;
@@ -1000,39 +1030,61 @@ function renderAllTrendChart() {
         return 0;
     });
 
+    const datasets = [{
+        label: `🌐 全廠 (ALL) - ${metricLabels[metric]}`,
+        data: allDataPoints,
+        borderColor: '#2563eb',
+        backgroundColor: 'rgba(37, 99, 235, 0.08)',
+        fill: true,
+        tension: 0.2,
+        borderWidth: 4,
+        pointRadius: 6,
+        pointHoverRadius: 8
+    }];
+
+    // 2. 勾選進行同圖對比的倉庫線
+    const allWhs = getAllWarehouseNames();
+    allWhs.forEach((whName, idx) => {
+        if (!checkedBoxes.includes(whName)) return;
+
+        const whDataPoints = activeSessions.map(s => {
+            let item = s.warehouseSummary.find(w => w.warehouse.trim() === whName.trim());
+            if (!item) item = s.warehouseSummary.find(w => w.warehouse.includes(whName) || whName.includes(w.warehouse));
+            if (!item || (item.count === 0 && item.stockQty === 0)) return null;
+
+            if (metric === 'allQtyPct') return item.stockQty ? (item.diffQty / item.stockQty) * 100 : 0;
+            if (metric === 'allAbsQtyPct') return item.stockQty ? (item.absDiffQty / item.stockQty) * 100 : 0;
+            if (metric === 'allAmtPct') return item.stockAmt ? (item.diffAmt / item.stockAmt) * 100 : 0;
+            if (metric === 'allAbsAmtPct') return item.stockAmt ? (item.absDiffAmt / item.stockAmt) * 100 : 0;
+            if (metric === 'allDiffAmt') return item.diffAmt;
+            if (metric === 'allAbsDiffAmt') return item.absDiffAmt;
+            return 0;
+        });
+
+        datasets.push({
+            label: `🏭 ${whName}`,
+            data: whDataPoints,
+            borderColor: chartColors[idx % chartColors.length],
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.15,
+            borderWidth: 2,
+            pointRadius: 4
+        });
+    });
+
     const ctx = document.getElementById('allTrendChartCanvas').getContext('2d');
     if (allTrendChartObj) allTrendChartObj.destroy();
 
     allTrendChartObj = new Chart(ctx, {
         type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: `全廠 ALL - ${metricLabels[metric]}`,
-                data: dataPoints,
-                borderColor: '#2563eb',
-                backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                fill: true,
-                tension: 0.2,
-                borderWidth: 3,
-                pointRadius: 6,
-                pointHoverRadius: 8
-            }]
-        },
+        data: { labels, datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            let val = context.raw;
-                            if (metric.includes('Pct')) return ` 指標: ${val.toFixed(3)}%`;
-                            return ` 金額: $${Math.round(val).toLocaleString()}`;
-                        }
-                    }
-                },
-                legend: { position: 'top', labels: { font: { size: 14, weight: 'bold' } } }
+                tooltip: { mode: 'index', intersect: false },
+                legend: { position: 'top', labels: { boxWidth: 14, font: { size: 12, weight: 'bold' } } }
             },
             scales: {
                 x: { title: { display: true, text: '盤點期數梯次' } },
@@ -1047,7 +1099,7 @@ function renderAllKpiMatrixTable() {
     tbody.innerHTML = '';
 
     if (historySessions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#94a3b8;">尚無歷史盤點資料</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#94a3b8;">尚無歷史盤點資料</td></tr>';
         return;
     }
 
@@ -1058,9 +1110,14 @@ function renderAllKpiMatrixTable() {
         const amtPct = kpi.totalStockAmt ? kpi.totalDiffAmt / kpi.totalStockAmt : 0;
         const absAmtPct = kpi.totalStockAmt ? kpi.totalAbsDiffAmt / kpi.totalStockAmt : 0;
 
+        const isEnabled = s.enabled !== false;
+
         const tr = document.createElement('tr');
+        if (!isEnabled) tr.style.opacity = '0.5';
+
         tr.innerHTML = `
             <td style="text-align:center; font-weight:bold;">${s.dateStr}</td>
+            <td style="text-align:center;">${isEnabled ? '<span style="color:#16a34a; font-weight:bold;">🟢 啟用中</span>' : '<span style="color:#dc2626; font-weight:bold;">🔴 已停用</span>'}</td>
             <td class="${qtyPct < 0 ? 'text-red' : ''}">${fmtPct3(qtyPct)}</td>
             <td>${fmtPct3(absQtyPct)}</td>
             <td class="${amtPct < 0 ? 'text-red' : ''}">${fmtPct3(amtPct)}</td>
@@ -1073,11 +1130,12 @@ function renderAllKpiMatrixTable() {
 }
 
 function renderMatrixTable() {
+    const activeSessions = historySessions.filter(s => s.enabled !== false);
     const headerTr = document.getElementById('matrixTableHeader');
     const tbody = document.querySelector('#historyMatrixTable tbody');
 
     headerTr.innerHTML = '<th>倉庫名稱</th>';
-    historySessions.forEach(s => {
+    activeSessions.forEach(s => {
         const th = document.createElement('th');
         th.innerText = s.dateStr;
         headerTr.appendChild(th);
@@ -1091,7 +1149,7 @@ function renderMatrixTable() {
         const tr = document.createElement('tr');
         tr.innerHTML = `<td style="text-align:left; font-weight:bold;">${whName}</td>`;
 
-        historySessions.forEach(s => {
+        activeSessions.forEach(s => {
             let item = s.warehouseSummary.find(w => w.warehouse.trim() === whName.trim());
             if (!item) item = s.warehouseSummary.find(w => w.warehouse.includes(whName) || whName.includes(w.warehouse));
 
@@ -1116,9 +1174,9 @@ function diagnoseHistoryData() {
     const out = document.getElementById('debugOutput');
     out.style.display = out.style.display === 'none' ? 'block' : 'none';
     out.innerText = "=== 歷史資料診斷訊息 ===\n";
-    out.innerText += `已載入期數: ${historySessions.length}\n`;
+    out.innerText += `已載入總期數: ${historySessions.length}\n`;
     historySessions.forEach((s, i) => {
-        out.innerText += `\n[期別 ${i+1}] ID: ${s.id} | 日期: ${s.dateStr} | 檔名: ${s.fileName} | 明細筆數: ${s.rawData.length}\n`;
+        out.innerText += `\n[期別 ${i+1}] ID: ${s.id} | 日期: ${s.dateStr} | 狀態: ${s.enabled !== false ? '啟用' : '停用'} | 檔名: ${s.fileName}\n`;
     });
 }
 
@@ -1127,7 +1185,7 @@ function renderSingleSession() {
     const session = historySessions.find(s => s.id === selId);
     if (!session) return;
 
-    document.getElementById('inventoryDateSpan').innerText = session.dateStr;
+    document.getElementById('inventoryDateSpan').innerText = session.dateStr + (session.enabled === false ? ' (🔴 此期已被手動停用/剔除趨勢圖)' : '');
 
     const kpi = session.overallKPI;
     const qtyPct = kpi.totalStockQty ? kpi.totalDiffQty / kpi.totalStockQty : 0;
@@ -1247,11 +1305,32 @@ function renderHistoryChips() {
     const container = document.getElementById('historyChipsArea');
     container.innerHTML = '';
     historySessions.forEach((s, idx) => {
+        const isEnabled = s.enabled !== false;
         const div = document.createElement('div');
-        div.className = 'history-chip';
-        div.innerHTML = `📅 期別 ${idx + 1}: <strong>${s.dateStr}</strong> (${s.fileName}) <span class="remove-chip" onclick="removeHistorySession('${s.id}')">✕</span>`;
+        div.className = 'history-card-item';
+        div.innerHTML = `
+            <div>
+                📅 期別 ${idx + 1}: <strong>${s.dateStr}</strong> 
+                <span style="color:#64748b; margin-left:8px;">(${s.fileName} | 明細 ${s.rawData.length} 筆)</span>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <button class="toggle-active-btn ${isEnabled ? 'btn-status-enabled' : 'btn-status-disabled'}" onclick="toggleSessionEnabled('${s.id}')">
+                    ${isEnabled ? '🟢 已啟用 (對比中)' : '🔴 已停用 (剔除趨勢圖)'}
+                </button>
+                <span class="remove-chip" style="cursor:pointer; color:#ef4444; font-weight:bold;" onclick="removeHistorySession('${s.id}')">✕ 刪除</span>
+            </div>
+        `;
         container.appendChild(div);
     });
+}
+
+function toggleSessionEnabled(id) {
+    const session = historySessions.find(s => s.id === id);
+    if (session) {
+        session.enabled = !(session.enabled !== false);
+        saveLocalHistory();
+        updateUI();
+    }
 }
 
 function removeHistorySession(id) {
@@ -1263,21 +1342,21 @@ function removeHistorySession(id) {
 function clearAllHistory() {
     if (confirm("確定要清除所有盤點歷史紀錄嗎？")) {
         historySessions = [];
-        localStorage.removeItem("inventory_history_v20");
+        localStorage.removeItem("inventory_history_v21");
         updateUI();
     }
 }
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v20", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v21", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v20");
+    const data = localStorage.getItem("inventory_history_v21");
     if (data) {
         try {
             historySessions = JSON.parse(data);
@@ -1396,14 +1475,15 @@ async function exportStyledExcel() {
 }
 
 async function exportHistoryExcel() {
-    if (historySessions.length === 0) return alert("尚無歷史數據可供匯出！");
+    const activeSessions = historySessions.filter(s => s.enabled !== false);
+    if (activeSessions.length === 0) return alert("尚無已啟用的歷史數據可供匯出！");
 
     const workbook = new ExcelJS.Workbook();
     const ws = workbook.addWorksheet('歷次倉別盤盈虧對比');
     ws.views = [{ showGridLines: true }];
 
     const headers = ["倉庫名稱"];
-    historySessions.forEach(s => headers.push(`${s.dateStr} (盈虧金額)`, `${s.dateStr} (絕對值金額)`));
+    activeSessions.forEach(s => headers.push(`${s.dateStr} (盈虧金額)`, `${s.dateStr} (絕對值金額)`));
     
     ws.getRow(1).values = headers;
     ws.getRow(1).font = { name: '微軟正黑體', bold: true };
@@ -1412,7 +1492,7 @@ async function exportHistoryExcel() {
 
     allWhs.forEach((whName, idx) => {
         const rowVals = [whName];
-        historySessions.forEach(s => {
+        activeSessions.forEach(s => {
             let item = s.warehouseSummary.find(w => w.warehouse.trim() === whName.trim());
             if (!item) item = s.warehouseSummary.find(w => w.warehouse.includes(whName) || whName.includes(w.warehouse));
 
