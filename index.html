@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統 (V14 欄位順序與名稱全兼容版)</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V15 欄位標題與順序全兼容版)</title>
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -299,12 +299,12 @@
 <div class="container">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V14)</h1>
-            <p>已整合同義詞自動對應與靈活欄位位置解析，無論 Excel 欄位順序為何均可完美讀取！</p>
+            <h1>📦 盤盈虧彙總與歷次對比分析系統 (V15)</h1>
+            <p>包含：盤盈虧數、數量差異、單位成本、盤盈虧金、庫存金額、金額差異 之全相容讀取！</p>
         </div>
         <div class="header-badges">
             <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
-            <span class="badge" style="background:#10b981;">⚡ 本機/備份數據保護</span>
+            <span class="badge" style="background:#10b981;">⚡ 本機數據保護</span>
         </div>
     </header>
 
@@ -591,21 +591,21 @@ function parseSheetData(rows, fileName) {
         const rowStr = rows[i].map(c => String(c || '').replace(/\s+/g, '')).join(',');
         
         if ((rowStr.includes('倉庫') || rowStr.includes('倉別')) && 
-            (rowStr.includes('庫存數量') || rowStr.includes('盤點數量') || rowStr.includes('庫存金額') || rowStr.includes('盤盈虧'))) {
+            (rowStr.includes('庫存') || rowStr.includes('盤點') || rowStr.includes('盤盈虧') || rowStr.includes('差異'))) {
             headerIdx = i;
             break;
         }
     }
 
     if (headerIdx === -1) {
-        alert(`無法解析檔案 ${fileName}！\n請確認檔案中是否包含「倉庫」、「庫存數量」與「盤點數量」等欄位標題。`);
+        alert(`無法解析檔案 ${fileName}！\n請確認檔案中是否包含「倉庫」、「庫存」與「盤點」等標頭欄位。`);
         return;
     }
 
     const rawHeaders = rows[headerIdx];
     const headers = rawHeaders.map(h => String(h || '').trim());
 
-    // 💡 V14 升級：全方位欄位關鍵字相容性配對
+    // 💡 V15 精確匹配邏輯：動態配對同義標題
     const getCol = (nameKeywords) => headers.findIndex(h => nameKeywords.some(kw => h.includes(kw)));
 
     const cDate = getCol(['盤點日期', '日期']);
@@ -616,15 +616,19 @@ function parseSheetData(rows, fileName) {
     const cUnit = getCol(['庫存單位', '單位']);
     const cWH = getCol(['倉庫', '倉別', 'ＡＬＬ', 'ALL']);
     const cStockQty = getCol(['庫存數量', '庫存數']);
-    const cCheckQty = getCol(['盤點數量', '盤點數']);
+    const cCheckQty = getCol(['盤點數量', '盤點數', '實盤數']);
     
-    // 💡 關鍵抓取：支援「盤盈虧數量」、「盤盈虧數」、「數量差異」、「盤差數量」
+    // 💡 全相容：包含 盤盈虧數、數量差異、盤盈虧數量、盤差數量
     const cDiffQty = getCol(['盤盈虧數量', '盤盈虧數', '數量差異', '盤差數量']);
-    const cCost = getCol(['單位成本', '單價']);
     
-    // 💡 關鍵抓取：支援「盤盈虧金額」、「盤盈虧金」、「金額差異」、「盤差金額」
+    // 💡 全相容：包含 單位成本、單價、成本
+    const cCost = getCol(['單位成本', '單價', '成本']);
+    
+    // 💡 全相容：包含 盤盈虧金額、盤盈虧金、金額差異、盤差金額
     const cDiffAmt = getCol(['盤盈虧金額', '盤盈虧金', '金額差異', '盤差金額']);
-    const cStockAmt = getCol(['庫存金額']);
+    
+    // 💡 全相容：包含 庫存金額、庫存總金額
+    const cStockAmt = getCol(['庫存金額', '庫存總額']);
 
     const dateSet = new Set();
     let lastValidDate = "";
@@ -646,11 +650,11 @@ function parseSheetData(rows, fileName) {
         }
         if (dVal) dateSet.add(dVal);
 
-        // 提取並解析數值
+        // 提取與轉型數值
         const stockQty = cStockQty !== -1 ? (parseFloat(String(row[cStockQty] || '0').replace(/,/g, '')) || 0) : 0;
         const checkQty = cCheckQty !== -1 ? (parseFloat(String(row[cCheckQty] || '0').replace(/,/g, '')) || 0) : 0;
         
-        // 若 Excel 無獨立盤差欄，自動相減計算法
+        // 若 Excel 無獨立差異欄位則自行相減
         let diffQty = cDiffQty !== -1 ? (parseFloat(String(row[cDiffQty] || '0').replace(/,/g, '')) || 0) : (checkQty - stockQty);
         
         const cost = cCost !== -1 ? (parseFloat(String(row[cCost] || '0').replace(/,/g, '')) || 0) : 0;
@@ -1080,21 +1084,21 @@ function removeHistorySession(id) {
 function clearAllHistory() {
     if (confirm("確定要清除所有盤點歷史紀錄嗎？")) {
         historySessions = [];
-        localStorage.removeItem("inventory_history_v14");
+        localStorage.removeItem("inventory_history_v15");
         updateUI();
     }
 }
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v14", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v15", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v14");
+    const data = localStorage.getItem("inventory_history_v15");
     if (data) {
         try {
             historySessions = JSON.parse(data);
