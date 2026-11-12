@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統 (V26 )</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V27 完整整合版)</title>
 
-        <!-- 🛡️ 1. Cloudflare Worker VPN 強制卡控驗證 -->
-<!-- 🛡️ 1. Cloudflare Worker VPN 強制卡控驗證 -->
+    <!-- 🛡️ 1. Cloudflare Worker VPN 強制卡控驗證 (無明文 IP 洩漏) -->
     <script>
     (async function verifyVpnGatekeeper() {
         const WORKER_URL = "https://vpn-gatekeeper.material-dep.workers.dev/";
@@ -54,6 +53,7 @@
         }
     })();
     </script>
+
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -196,6 +196,17 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
+        .interval-pill {
+            display: inline-block;
+            background-color: #fef3c7;
+            color: #b45309;
+            border: 1px solid #fcd34d;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
         .upload-section {
             background: var(--card-bg);
             border: 2px dashed #cbd5e1;
@@ -302,7 +313,9 @@
         .target-row { background-color: #84cc16 !important; color: #000; font-weight: bold; }
 
         .date-badge {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
             background-color: #eff6ff;
             color: #1e40af;
             border: 1px solid #bfdbfe;
@@ -448,7 +461,7 @@
 <div class="container" id="mainAppContainer" style="display: none;">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次趨勢對比系統 (V26)</h1>
+            <h1>📦 盤盈虧彙總與歷次趨勢對比系統 (V27)</h1>
         </div>
         <div class="header-badges">
             <span class="badge" style="background:#8b5cf6;">🛡️ VPN + 密碼雙重保護</span>
@@ -511,7 +524,7 @@
             <canvas id="trendChartCanvas"></canvas>
         </div>
 
-        <h4 style="margin-bottom: 10px;">📊 歷次對比矩陣數據表 (已自動過濾「停用期別」)</h4>
+        <h4 style="margin-bottom: 10px;">📊 歷次對比矩陣數據表 (已自動過濾「停用期別」並標註間隔天數)</h4>
         <div class="table-responsive">
             <table class="sheet-table" id="historyMatrixTable">
                 <thead>
@@ -584,12 +597,13 @@
             <canvas id="allTrendChartCanvas"></canvas>
         </div>
 
-        <h4 style="margin-bottom: 10px;">📋 全廠 (ALL) 歷次 KPI 總表數據 (包含停用與啟用狀態標示)</h4>
+        <h4 style="margin-bottom: 10px;">📋 全廠 (ALL) 歷次 KPI 總表數據 (含各期間隔天數)</h4>
         <div class="table-responsive">
             <table class="sheet-table" id="allKpiMatrixTable">
                 <thead>
                     <tr>
                         <th>盤點期別</th>
+                        <th>距上期間隔</th>
                         <th>狀態</th>
                         <th>盤盈虧數量%</th>
                         <th>盤盈虧數量(絕對值)%</th>
@@ -600,7 +614,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr><td colspan="8" style="text-align:center; color:#94a3b8;">尚無歷史盤點資料</td></tr>
+                    <tr><td colspan="9" style="text-align:center; color:#94a3b8;">尚無歷史盤點資料</td></tr>
                 </tbody>
             </table>
         </div>
@@ -616,7 +630,10 @@
             <button class="export-btn" onclick="exportStyledExcel()">🎨 匯出完整美化 Excel 檔 (含雙分頁)</button>
         </div>
 
-        <div id="dateDisplayArea" class="date-badge">📅 盤點日期：<span id="inventoryDateSpan">-</span></div>
+        <div id="dateDisplayArea" class="date-badge">
+            <span>📅 盤點日期：<span id="inventoryDateSpan">-</span></span>
+            <span id="singleIntervalBadge" class="interval-pill" style="display:none;"></span>
+        </div>
 
         <div class="layout-grid">
             <div>
@@ -723,10 +740,10 @@
         </div>
     </div>
 
-    <!-- Main Tab 4: 歷次紀錄管理 (含手動剔除功能與刪除密碼驗證) -->
+    <!-- Main Tab 4: 歷次紀錄管理 -->
     <div id="manageTab" class="card" style="display: none;">
         <h3>📁 歷次盤點紀錄管理與剔除開關</h3>
-        <p style="color:#64748b; font-size:0.9rem;">可在此開關各期狀態。若要進行<b>「刪除」</b>操作，必須輸入安全驗證密碼（預設密碼：<b>1021</b>）。</p>
+        <p style="color:#64748b; font-size:0.9rem;">可在此開關各期狀態，並檢視每期與前一次盤點的相隔天數。若要進行<b>「刪除」</b>操作，必須輸入安全驗證密碼。</p>
         <div id="historyChipsArea" style="margin-bottom: 20px;"></div>
         <button class="export-btn" style="background:#ef4444;" onclick="clearAllHistory()">🔥 清除全歷史紀錄 (需密碼)</button>
     </div>
@@ -747,8 +764,6 @@ function verifyStartupPassword() {
         sessionStorage.setItem("inventory_unlocked", "true");
         document.getElementById('authOverlay').style.display = 'none';
         document.getElementById('mainAppContainer').style.display = 'block';
-        
-        // 關鍵修正：等主畫面顯示出來後，再重新計算圖表寬高與更新畫面
         setTimeout(() => {
             updateUI();
             if (trendChartObj) trendChartObj.resize();
@@ -762,7 +777,7 @@ function verifyStartupPassword() {
 }
 
 // ==========================================
-// 🔑 1. Firebase 初始化設定區塊
+// 🔑 1. Firebase 初始化設定區塊 (請填入您的金鑰)
 // ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyA9khVWW9APvXRAB8AYMRZsFoNxQKGZaKI",
@@ -809,7 +824,7 @@ try {
 }
 
 // ==========================================
-// 📊 2. 系統邏輯與變數
+// 📊 2. 系統邏輯與日期間隔計算工具
 // ==========================================
 let historySessions = [];
 let selectedSessionId = null;
@@ -829,6 +844,70 @@ const chartColors = [
     '#6366f1', '#84cc16', '#06b6d4', '#d946ef', '#64748b', '#059669', '#b91c1c', '#4338ca', '#38bdf8'
 ];
 
+// 📅 解析日期字串轉成 Date 物件 (支援 YYYY/MM/DD, YYYY-MM-DD, MM/DD, 民國年及日期區間)
+function parseBaseDateFromStr(dateStr) {
+    if (!dateStr) return null;
+    const firstPart = dateStr.split('~')[0].trim();
+    const nums = firstPart.match(/\d+/g);
+    if (!nums || nums.length < 2) return null;
+
+    let year, month, day;
+    if (nums.length >= 3) {
+        year = parseInt(nums[0], 10);
+        if (year < 1911) year += 1911;
+        month = parseInt(nums[1], 10) - 1;
+        day = parseInt(nums[2], 10);
+    } else {
+        year = new Date().getFullYear();
+        month = parseInt(nums[0], 10) - 1;
+        day = parseInt(nums[1], 10);
+    }
+
+    const d = new Date(year, month, day);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+// 📅 自動計算每個期別與上一期的天數差異
+function calculateSessionIntervals() {
+    historySessions.sort((a, b) => {
+        const dA = parseBaseDateFromStr(a.dateStr);
+        const dB = parseBaseDateFromStr(b.dateStr);
+        if (dA && dB) return dA - dB;
+        return a.dateStr.localeCompare(b.dateStr);
+    });
+
+    for (let i = 0; i < historySessions.length; i++) {
+        if (i === 0) {
+            historySessions[i].daysSincePrevAll = null;
+        } else {
+            const prevD = parseBaseDateFromStr(historySessions[i - 1].dateStr);
+            const currD = parseBaseDateFromStr(historySessions[i].dateStr);
+            if (prevD && currD) {
+                const diffTime = currD.getTime() - prevD.getTime();
+                historySessions[i].daysSincePrevAll = Math.round(diffTime / (1000 * 60 * 60 * 24));
+            } else {
+                historySessions[i].daysSincePrevAll = null;
+            }
+        }
+    }
+
+    const activeList = historySessions.filter(s => s.enabled !== false);
+    for (let i = 0; i < activeList.length; i++) {
+        if (i === 0) {
+            activeList[i].daysSincePrevActive = null;
+        } else {
+            const prevD = parseBaseDateFromStr(activeList[i - 1].dateStr);
+            const currD = parseBaseDateFromStr(activeList[i].dateStr);
+            if (prevD && currD) {
+                const diffTime = currD.getTime() - prevD.getTime();
+                activeList[i].daysSincePrevActive = Math.round(diffTime / (1000 * 60 * 60 * 24));
+            } else {
+                activeList[i].daysSincePrevActive = null;
+            }
+        }
+    }
+}
+
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 
@@ -845,7 +924,6 @@ fileInput.addEventListener('change', (e) => {
 });
 
 window.addEventListener('DOMContentLoaded', () => {
-    // 檢查同分頁是否已解鎖
     if (sessionStorage.getItem("inventory_unlocked") === "true") {
         document.getElementById('authOverlay').style.display = 'none';
         document.getElementById('mainAppContainer').style.display = 'block';
@@ -1040,7 +1118,7 @@ function parseSheetData(rows, fileName) {
         historySessions.push(sessionObj);
     }
 
-    historySessions.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+    calculateSessionIntervals();
     selectedSessionId = sessionObj.id;
 
     if (isCloudConnected && db) {
@@ -1113,6 +1191,7 @@ function computeWarehouseSummary(rawData) {
 }
 
 function updateUI() {
+    calculateSessionIntervals();
     const activeSessions = historySessions.filter(s => s.enabled !== false);
     document.getElementById('sessionCountBadge').innerText = `已載入期數：${historySessions.length} 期 (啟用 ${activeSessions.length} 期)`;
 
@@ -1145,7 +1224,9 @@ function updateDropdowns() {
 
     historySessions.forEach(s => {
         const disabledTag = s.enabled === false ? ' [已停用]' : '';
-        const title = `📅 ${s.dateStr} [${s.fileName}]${disabledTag}`;
+        const intervalTag = s.daysSincePrevAll !== null && s.daysSincePrevAll !== undefined ? ` (距上期 ${s.daysSincePrevAll} 天)` : ' (首次)';
+        const title = `📅 ${s.dateStr}${intervalTag} [${s.fileName}]${disabledTag}`;
+        
         const opt1 = document.createElement('option');
         opt1.value = s.id;
         opt1.textContent = title;
@@ -1196,6 +1277,14 @@ function selectAllCompareWarehouses(checked) {
     renderAllTrendChart();
 }
 
+// 產生帶有間隔天數的圖表 X 軸多行標籤
+function formatChartAxisLabel(session) {
+    if (session.daysSincePrevActive !== null && session.daysSincePrevActive !== undefined) {
+        return [session.dateStr, `(間隔 ${session.daysSincePrevActive} 天)`];
+    }
+    return [session.dateStr, "(基準首期)"];
+}
+
 function renderTrendChart() {
     const activeSessions = historySessions.filter(s => s.enabled !== false);
     if (activeSessions.length === 0) return;
@@ -1203,7 +1292,7 @@ function renderTrendChart() {
     const metric = document.getElementById('metricSelect').value;
     const checkedBoxes = Array.from(document.querySelectorAll('#whCheckboxContainer input[type="checkbox"]:checked')).map(cb => cb.value);
 
-    const labels = activeSessions.map(s => s.dateStr);
+    const labels = activeSessions.map(formatChartAxisLabel);
     const datasets = [];
     const allWhs = getAllWarehouseNames();
 
@@ -1255,7 +1344,7 @@ function renderTrendChart() {
                 legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } }
             },
             scales: {
-                x: { title: { display: true, text: '盤點日期梯次' } },
+                x: { title: { display: true, text: '盤點日期梯次與間隔天數' } },
                 y: { title: { display: true, text: '數值' } }
             }
         }
@@ -1269,7 +1358,7 @@ function renderAllTrendChart() {
     const metric = document.getElementById('allMetricSelect').value;
     const checkedBoxes = Array.from(document.querySelectorAll('#allWhCompareCheckboxContainer input[type="checkbox"]:checked')).map(cb => cb.value);
 
-    const labels = activeSessions.map(s => s.dateStr);
+    const labels = activeSessions.map(formatChartAxisLabel);
 
     const metricLabels = {
         'allDiffAmt': '盤盈虧金額 ($)',
@@ -1353,7 +1442,7 @@ function renderAllTrendChart() {
                 legend: { position: 'top', labels: { boxWidth: 14, font: { size: 12, weight: 'bold' } } }
             },
             scales: {
-                x: { title: { display: true, text: '盤點期數梯次' } },
+                x: { title: { display: true, text: '盤點期數梯次與間隔天數' } },
                 y: { title: { display: true, text: metric.includes('Pct') ? '百分比 (%)' : (metric.includes('Amt') ? '金額 ($)' : '數量') } }
             }
         }
@@ -1365,7 +1454,7 @@ function renderAllKpiMatrixTable() {
     tbody.innerHTML = '';
 
     if (historySessions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#94a3b8;">尚無歷史盤點資料</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:#94a3b8;">尚無歷史盤點資料</td></tr>';
         return;
     }
 
@@ -1377,12 +1466,18 @@ function renderAllKpiMatrixTable() {
         const absAmtPct = kpi.totalStockAmt ? kpi.totalAbsDiffAmt / kpi.totalStockAmt : 0;
 
         const isEnabled = s.enabled !== false;
+        
+        let intervalBadge = '<span style="color:#64748b;">基準首期</span>';
+        if (s.daysSincePrevAll !== null && s.daysSincePrevAll !== undefined) {
+            intervalBadge = `<span style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:0.82rem;">⏱️ ${s.daysSincePrevAll} 天</span>`;
+        }
 
         const tr = document.createElement('tr');
         if (!isEnabled) tr.style.opacity = '0.5';
 
         tr.innerHTML = `
             <td style="text-align:center; font-weight:bold;">${s.dateStr}</td>
+            <td style="text-align:center;">${intervalBadge}</td>
             <td style="text-align:center;">${isEnabled ? '<span style="color:#16a34a; font-weight:bold;">🟢 啟用中</span>' : '<span style="color:#dc2626; font-weight:bold;">🔴 已停用</span>'}</td>
             <td class="${qtyPct < 0 ? 'text-red' : ''}">${fmtPct3(qtyPct)}</td>
             <td>${fmtPct3(absQtyPct)}</td>
@@ -1403,7 +1498,10 @@ function renderMatrixTable() {
     headerTr.innerHTML = '<th>倉庫名稱</th>';
     activeSessions.forEach(s => {
         const th = document.createElement('th');
-        th.innerText = s.dateStr;
+        const subText = (s.daysSincePrevActive !== null && s.daysSincePrevActive !== undefined) 
+            ? `<br><span style="font-size:0.75rem; color:#0284c7; font-weight:normal;">(間隔 ${s.daysSincePrevActive} 天)</span>` 
+            : `<br><span style="font-size:0.75rem; color:#64748b; font-weight:normal;">(基準首期)</span>`;
+        th.innerHTML = `${s.dateStr}${subText}`;
         headerTr.appendChild(th);
     });
 
@@ -1442,7 +1540,8 @@ function diagnoseHistoryData() {
     out.innerText = "=== 歷史資料診斷訊息 ===\n";
     out.innerText += `已載入總期數: ${historySessions.length}\n`;
     historySessions.forEach((s, i) => {
-        out.innerText += `\n[期別 ${i+1}] ID: ${s.id} | 日期: ${s.dateStr} | 狀態: ${s.enabled !== false ? '啟用' : '停用'} | 檔名: ${s.fileName}\n`;
+        const intervalInfo = s.daysSincePrevAll !== null && s.daysSincePrevAll !== undefined ? `距上期 ${s.daysSincePrevAll} 天` : '基準首期';
+        out.innerText += `\n[期別 ${i+1}] ID: ${s.id} | 日期: ${s.dateStr} (${intervalInfo}) | 狀態: ${s.enabled !== false ? '啟用' : '停用'} | 檔名: ${s.fileName}\n`;
     });
 }
 
@@ -1452,6 +1551,15 @@ function renderSingleSession() {
     if (!session) return;
 
     document.getElementById('inventoryDateSpan').innerText = session.dateStr + (session.enabled === false ? ' (🔴 此期已被手動停用/剔除趨勢圖)' : '');
+
+    const intervalBadge = document.getElementById('singleIntervalBadge');
+    if (session.daysSincePrevAll !== null && session.daysSincePrevAll !== undefined) {
+        intervalBadge.style.display = 'inline-block';
+        intervalBadge.innerText = `⏱️ 距上期相隔 ${session.daysSincePrevAll} 天`;
+    } else {
+        intervalBadge.style.display = 'inline-block';
+        intervalBadge.innerText = '⏱️ 基準首期';
+    }
 
     const kpi = session.overallKPI;
     const qtyPct = kpi.totalStockQty ? kpi.totalDiffQty / kpi.totalStockQty : 0;
@@ -1572,11 +1680,17 @@ function renderHistoryChips() {
     container.innerHTML = '';
     historySessions.forEach((s, idx) => {
         const isEnabled = s.enabled !== false;
+        
+        let intervalText = '<span style="background:#f1f5f9; color:#475569; padding:2px 8px; border-radius:10px; font-size:0.8rem; margin-left:8px;">基準首期</span>';
+        if (s.daysSincePrevAll !== null && s.daysSincePrevAll !== undefined) {
+            intervalText = `<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:0.8rem; font-weight:bold; margin-left:8px;">⏱️ 距上期 ${s.daysSincePrevAll} 天</span>`;
+        }
+
         const div = document.createElement('div');
         div.className = 'history-card-item';
         div.innerHTML = `
             <div>
-                📅 期別 ${idx + 1}: <strong>${s.dateStr}</strong> 
+                📅 期別 ${idx + 1}: <strong>${s.dateStr}</strong>${intervalText}
                 <span style="color:#64748b; margin-left:8px;">(${s.fileName} | 明細 ${s.rawData.length} 筆)</span>
             </div>
             <div style="display:flex; gap:10px; align-items:center;">
@@ -1628,7 +1742,7 @@ function clearAllHistory() {
     if (pwd === DELETE_PASSWORD) {
         if (confirm("最後確認：確定要徹底清空所有數據嗎？")) {
             historySessions = [];
-            localStorage.removeItem("inventory_history_v26");
+            localStorage.removeItem("inventory_history_v27");
             updateUI();
             alert("✅ 所有歷史紀錄已完全清空。");
         }
@@ -1639,17 +1753,18 @@ function clearAllHistory() {
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v26", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v27", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v26");
+    const data = localStorage.getItem("inventory_history_v27");
     if (data) {
         try {
             historySessions = JSON.parse(data);
+            calculateSessionIntervals();
             if (historySessions.length > 0) selectedSessionId = historySessions[0].id;
             updateUI();
         } catch(e) { console.error(e); }
@@ -1664,7 +1779,7 @@ async function loadCloudHistory() {
         snapshot.forEach(doc => cloudData.push(doc.data()));
         if (cloudData.length > 0) {
             historySessions = cloudData;
-            historySessions.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+            calculateSessionIntervals();
             saveLocalHistory();
             updateUI();
             console.log("成功從 Cloud Firestore 載入雲端資料！");
@@ -1791,7 +1906,10 @@ async function exportHistoryExcel() {
     ws.views = [{ showGridLines: true }];
 
     const headers = ["倉庫名稱"];
-    activeSessions.forEach(s => headers.push(`${s.dateStr} (盈虧金額)`, `${s.dateStr} (絕對值金額)`));
+    activeSessions.forEach(s => {
+        const intervalTag = (s.daysSincePrevActive !== null && s.daysSincePrevActive !== undefined) ? ` [間隔${s.daysSincePrevActive}天]` : ` [基準首期]`;
+        headers.push(`${s.dateStr}${intervalTag} (盈虧金額)`, `${s.dateStr}${intervalTag} (絕對值金額)`);
+    });
     
     ws.getRow(1).values = headers;
     ws.getRow(1).font = { name: '微軟正黑體', bold: true };
