@@ -1005,10 +1005,10 @@ function parseSheetData(rows, fileName) {
         return;
     }
 
-    const rawHeaders = rows[headerIdx];
-    const headers = rawHeaders.map(h => String(h || '').replace(/[\r\n\s]+/g, '').trim());
+    const rawHeaders = Array.from(rows[headerIdx] || []);
+    const headers = rawHeaders.map(h => (h === undefined || h === null) ? '' : String(h).replace(/[\r\n\s]+/g, '').trim());
 
-    const getCol = (keywords) => headers.findIndex(h => keywords.some(kw => h.includes(kw)));
+    const getCol = (keywords) => headers.findIndex(h => typeof h === 'string' && keywords.some(kw => h.includes(kw)));
 
     const cDate = getCol(['盤點日期', '日期']);
     const cNo = getCol(['盤點單號', '單號']);
