@@ -742,7 +742,13 @@ function verifyStartupPassword() {
         sessionStorage.setItem("inventory_unlocked", "true");
         document.getElementById('authOverlay').style.display = 'none';
         document.getElementById('mainAppContainer').style.display = 'block';
-        updateUI();
+        
+        // 關鍵修正：等主畫面顯示出來後，再重新計算圖表寬高與更新畫面
+        setTimeout(() => {
+            updateUI();
+            if (trendChartObj) trendChartObj.resize();
+            if (allTrendChartObj) allTrendChartObj.resize();
+        }, 100);
     } else {
         errorMsg.innerText = "❌ 密碼錯誤，請重新輸入！";
         input.value = "";
