@@ -6,37 +6,42 @@
     <title>盤盈虧彙總與歷次趨勢對比系統 (V26 )</title>
 
         <!-- 🛡️ 1. Cloudflare Worker VPN 強制卡控驗證 -->
+<!-- 🛡️ 1. Cloudflare Worker VPN 強制卡控驗證 -->
     <script>
     (async function verifyVpnGatekeeper() {
         const WORKER_URL = "https://vpn-gatekeeper.material-dep.workers.dev/";
+
+        const lockScreen = (msg) => {
+            const renderLock = () => {
+                document.body.innerHTML = `
+                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#f8fafc; text-align:center; padding:20px; margin:0;">
+                        <div style="background:white; padding:40px; border-radius:14px; box-shadow:0 10px 25px rgba(0,0,0,0.08); max-width:480px; border:1px solid #e2e8f0;">
+                            <div style="font-size:3rem; margin-bottom:12px;">🔒</div>
+                            <h1 style="color:#ef4444; margin:0 0 12px 0; font-size:1.5rem;">系統存取受限</h1>
+                            <p style="color:#334155; font-size:1.05rem; line-height:1.6; margin-bottom:24px;">
+                                ${msg || "本系統僅限內部人員使用，請先連線至公司指定 VPN 後再重新整理頁面。"}
+                            </p>
+                            <button onclick="location.reload()" style="padding:12px 28px; background:#2563eb; color:white; border:none; border-radius:8px; font-size:1rem; font-weight:600; cursor:pointer; box-shadow:0 2px 6px rgba(37,99,235,0.3);">
+                                🔄 我已連上 VPN，重新整理
+                            </button>
+                        </div>
+                    </div>
+                `;
+            };
+
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", renderLock);
+            } else {
+                renderLock();
+            }
+        };
 
         try {
             const res = await fetch(WORKER_URL);
             const data = await res.json();
 
             if (!res.ok || !data.allowed) {
-                const lockScreen = () => {
-                    document.body.innerHTML = `
-                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#f8fafc; text-align:center; padding:20px; margin:0;">
-                            <div style="background:white; padding:40px; border-radius:14px; box-shadow:0 10px 25px rgba(0,0,0,0.08); max-width:480px; border:1px solid #e2e8f0;">
-                                <div style="font-size:3rem; margin-bottom:12px;">🔒</div>
-                                <h1 style="color:#ef4444; margin:0 0 12px 0; font-size:1.5rem;">系統存取受限</h1>
-                                <p style="color:#334155; font-size:1.05rem; line-height:1.6; margin-bottom:24px;">
-                                    ${data.message || "本系統僅限內部人員使用，請先連線至公司指定 VPN (211.20.7.168) 後再重新整理頁面。"}
-                                </p>
-                                <button onclick="location.reload()" style="padding:12px 28px; background:#2563eb; color:white; border:none; border-radius:8px; font-size:1rem; font-weight:600; cursor:pointer; box-shadow:0 2px 6px rgba(37,99,235,0.3);">
-                                    🔄 我已連上 VPN，重新整理
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                };
-
-                if (document.readyState === "loading") {
-                    document.addEventListener("DOMContentLoaded", lockScreen);
-                } else {
-                    lockScreen();
-                }
+                lockScreen(data.message);
                 return;
             }
 
@@ -45,6 +50,7 @@
 
         } catch (err) {
             console.error("⚠️ VPN 驗證連線異常:", err);
+            lockScreen("安全驗證服務連線失敗，請確認網路環境或開啟公司 VPN 後重試。");
         }
     })();
     </script>
