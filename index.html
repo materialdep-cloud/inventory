@@ -776,6 +776,13 @@ try {
     if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
         firebase.initializeApp(firebaseConfig);
         db = firebase.firestore();
+
+        // 🛡️ 強制改用相容短連線模式，穿透公司 VPN 防火牆阻擋
+        db.settings({
+            experimentalForceLongPolling: true,
+            useFetchStreams: false
+        });
+
         auth = firebase.auth();
 
         auth.signInAnonymously().then(() => {
