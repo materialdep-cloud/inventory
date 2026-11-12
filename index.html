@@ -3,7 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>盤盈虧彙總與歷次趨勢對比系統</title>
+    <title>盤盈虧彙總與歷次趨勢對比系統 (V26 )</title>
+
+    <!-- 🛡️ 1. Cloudflare Worker VPN 強制卡控驗證 -->
+    <script>
+    (async function verifyVpnGatekeeper() {
+        const WORKER_URL = "https://vpn-gatekeeper.material-dep.workers.dev/";
+
+        try {
+            const res = await fetch(WORKER_URL);
+            const data = await res.json();
+
+            if (!res.ok || !data.allowed) {
+                const lockScreen = () => {
+                    document.body.innerHTML = `
+                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#f8fafc; text-align:center; padding:20px; margin:0;">
+                            <div style="background:white; padding:40px; border-radius:14px; box-shadow:0 10px 25px rgba(0,0,0,0.08); max-width:480px; border:1px solid #e2e8f0;">
+                                <div style="font-size:3rem; margin-bottom:12px;">🔒</div>
+                                <h1 style="color:#ef4444; margin:0 0 12px 0; font-size:1.5rem;">系統存取受限</h1>
+                                <p style="color:#334155; font-size:1.05rem; line-height:1.6; margin-bottom:24px;">
+                                    ${data.message || "本系統僅限內部人員使用，請先連線至公司指定 VPN (211.20.7.168) 後再重新整理頁面。"}
+                                </p>
+                                <button onclick="location.reload()" style="padding:12px 28px; background:#2563eb; color:white; border:none; border-radius:8px; font-size:1rem; font-weight:600; cursor:pointer; box-shadow:0 2px 6px rgba(37,99,235,0.3);">
+                                    🔄 我已連上 VPN，重新整理
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                };
+
+                if (document.readyState === "loading") {
+                    document.addEventListener("DOMContentLoaded", lockScreen);
+                } else {
+                    lockScreen();
+                }
+                return;
+            }
+
+            window.SECURE_TARGET_DOMAIN = data.targetDomain;
+            console.log("✅ VPN 驗證通過，允許存取系統。");
+
+        } catch (err) {
+            console.error("⚠️ VPN 驗證連線異常:", err);
+        }
+    })();
+    </script>
+
     <!-- SheetJS for reading Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- ExcelJS for styling exported Excel -->
@@ -33,6 +78,83 @@
             color: var(--text-color);
             margin: 0;
             padding: 20px;
+        }
+
+        /* 🔐 開啟系統全螢幕密碼鎖樣式 */
+        #authOverlay {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .auth-box {
+            background: #ffffff;
+            padding: 40px 36px;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .auth-box h2 {
+            margin: 12px 0 8px 0;
+            color: #0f172a;
+            font-size: 1.45rem;
+        }
+
+        .auth-box p {
+            margin: 0 0 24px 0;
+            color: #64748b;
+            font-size: 0.92rem;
+        }
+
+        .auth-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px 16px;
+            font-size: 1.1rem;
+            border: 2px solid #cbd5e1;
+            border-radius: 10px;
+            text-align: center;
+            letter-spacing: 3px;
+            outline: none;
+            transition: border-color 0.2s;
+            margin-bottom: 14px;
+        }
+
+        .auth-input:focus {
+            border-color: var(--primary);
+        }
+
+        .auth-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .auth-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        #authErrorMsg {
+            color: #ef4444;
+            font-size: 0.88rem;
+            font-weight: 600;
+            margin-top: 12px;
+            min-height: 20px;
         }
 
         .container {
@@ -305,12 +427,26 @@
 </head>
 <body>
 
-<div class="container">
+<!-- 🔐 開啟系統前強制密碼驗證畫面 -->
+<div id="authOverlay">
+    <div class="auth-box">
+        <div style="font-size: 3rem;">🔐</div>
+        <h2>盤盈虧系統安全驗證</h2>
+        <p>為避免無關人員檢視內部數據，請輸入開啟密碼</p>
+        <input type="password" id="startupPwdInput" class="auth-input" placeholder="請輸入系統密碼" autofocus onkeydown="if(event.key==='Enter') verifyStartupPassword()">
+        <button class="auth-btn" onclick="verifyStartupPassword()">🔓 解鎖進入系統</button>
+        <div id="authErrorMsg"></div>
+    </div>
+</div>
+
+<!-- 預設隱藏主內容，直到輸入正確密碼才顯示 -->
+<div class="container" id="mainAppContainer" style="display: none;">
     <header>
         <div>
-            <h1>📦 盤盈虧彙總與歷次趨勢對比系統 (V24)</h1>
+            <h1>📦 盤盈虧彙總與歷次趨勢對比系統 (V26)</h1>
         </div>
         <div class="header-badges">
+            <span class="badge" style="background:#8b5cf6;">🛡️ VPN + 密碼雙重保護</span>
             <span class="badge" id="sessionCountBadge">已載入期數：0 期</span>
             <span class="badge" id="cloudStatusBadge" style="background:#3b82f6;">☁️ 雲端狀態：連接中...</span>
         </div>
@@ -427,7 +563,6 @@
                     <option value="allAbsAmtPct" selected>盤盈虧金額差異(絕對值)%</option>
                 </select>
             </div>
-            <!-- 💡 新增的對比倉庫全選/全不選按鈕 -->
             <div>
                 <button class="upload-btn" style="padding:4px 12px; font-size:0.85rem;" onclick="selectAllCompareWarehouses(true)">全選倉庫</button>
                 <button class="upload-btn" style="padding:4px 12px; font-size:0.85rem; background:#64748b;" onclick="selectAllCompareWarehouses(false)">全不選</button>
@@ -594,9 +729,26 @@
 
 <script>
 // ==========================================
-// 🔒 刪除防護密碼
+// 🔐 開啟系統驗證密碼 & 刪除防護密碼
 // ==========================================
+const STARTUP_PASSWORD = "54039755";
 const DELETE_PASSWORD = "1021";
+
+function verifyStartupPassword() {
+    const input = document.getElementById('startupPwdInput');
+    const errorMsg = document.getElementById('authErrorMsg');
+
+    if (input.value === STARTUP_PASSWORD) {
+        sessionStorage.setItem("inventory_unlocked", "true");
+        document.getElementById('authOverlay').style.display = 'none';
+        document.getElementById('mainAppContainer').style.display = 'block';
+        updateUI();
+    } else {
+        errorMsg.innerText = "❌ 密碼錯誤，請重新輸入！";
+        input.value = "";
+        input.focus();
+    }
+}
 
 // ==========================================
 // 🔑 1. Firebase 初始化設定區塊
@@ -675,6 +827,11 @@ fileInput.addEventListener('change', (e) => {
 });
 
 window.addEventListener('DOMContentLoaded', () => {
+    // 檢查同分頁是否已解鎖
+    if (sessionStorage.getItem("inventory_unlocked") === "true") {
+        document.getElementById('authOverlay').style.display = 'none';
+        document.getElementById('mainAppContainer').style.display = 'block';
+    }
     loadLocalHistory();
 });
 
@@ -1015,7 +1172,6 @@ function selectAllWarehouses(checked) {
     renderTrendChart();
 }
 
-// 💡 新增：全廠同台對比頁面的「全選 / 全不選倉庫」功能
 function selectAllCompareWarehouses(checked) {
     const checkboxes = document.querySelectorAll('#allWhCompareCheckboxContainer input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = checked);
@@ -1429,10 +1585,9 @@ function toggleSessionEnabled(id) {
     }
 }
 
-// 💡 刪除單期紀錄 (需輸入密碼 1021)
 function removeHistorySession(id) {
     const pwd = prompt("🔒 刪除紀錄為敏感操作，請輸入管理密碼：");
-    if (pwd === null) return; // 使用者點擊取消
+    if (pwd === null) return;
 
     if (pwd === DELETE_PASSWORD) {
         historySessions = historySessions.filter(s => s.id !== id);
@@ -1448,7 +1603,6 @@ function removeHistorySession(id) {
     }
 }
 
-// 💡 清除全歷史紀錄 (需輸入密碼 1021)
 function clearAllHistory() {
     const pwd = prompt("🔥 警告！這將清除【所有】盤點歷史紀錄，請輸入管理密碼確認：");
     if (pwd === null) return;
@@ -1456,7 +1610,7 @@ function clearAllHistory() {
     if (pwd === DELETE_PASSWORD) {
         if (confirm("最後確認：確定要徹底清空所有數據嗎？")) {
             historySessions = [];
-            localStorage.removeItem("inventory_history_v24");
+            localStorage.removeItem("inventory_history_v26");
             updateUI();
             alert("✅ 所有歷史紀錄已完全清空。");
         }
@@ -1467,14 +1621,14 @@ function clearAllHistory() {
 
 function saveLocalHistory() {
     try {
-        localStorage.setItem("inventory_history_v24", JSON.stringify(historySessions));
+        localStorage.setItem("inventory_history_v26", JSON.stringify(historySessions));
     } catch(e) {
         console.warn("LocalStorage 儲存上限警告", e);
     }
 }
 
 function loadLocalHistory() {
-    const data = localStorage.getItem("inventory_history_v24");
+    const data = localStorage.getItem("inventory_history_v26");
     if (data) {
         try {
             historySessions = JSON.parse(data);
