@@ -567,10 +567,24 @@
             </div>
         </div>
 
+        <!-- 📈 直線趨勢計算方式與判讀說明 -->
+        <div style="margin:12px 0 16px; padding:12px 16px; border:1px solid #bfdbfe; border-left:5px solid #2563eb; border-radius:8px; background:#eff6ff; color:#1e3a8a; line-height:1.75; font-size:0.88rem;">
+            <div style="font-weight:700; font-size:0.95rem; margin-bottom:4px;">📈 直線趨勢怎麼計算？怎麼看？</div>
+            <div>
+                <strong>計算方式：</strong>系統使用「線性回歸」分析目前圖表中各條數據線的有效盤點資料，以盤點期數順序作為 X 軸、KPI 數值作為 Y 軸，計算最能代表歷次數據整體走向的直線。每一期各算一期，不會依實際間隔天數加權；原始盤點數據不會被修改。
+            </div>
+            <div style="margin-top:4px;">
+                <strong>判讀方式：</strong>對於「絕對值」指標（差異越小越好），趨勢線向下代表<strong style="color:#15803d;">改善</strong>，向上代表<strong style="color:#dc2626;">惡化</strong>；趨勢變化幅度很小則標示<strong>持平</strong>。非絕對值指標則顯示上升或下降，不直接判定好壞，須搭配正負值及管理目標解讀。
+            </div>
+            <div style="margin-top:4px; color:#475569; font-size:0.82rem;">
+                <strong>提醒：</strong>趨勢直線呈現的是歷次資料的整體方向，不代表每一期都持續改善，也不代表未來結果。
+            </div>
+        </div>
+
         <div class="chart-controls">
             <div>
                 <label style="font-weight: bold; font-size: 0.9rem;">全廠與各倉對比指標 (共8項)：</label>
-                <select id="allMetricSelect" onchange="renderAllTrendChart(); renderAllOnlyTrendChart(); renderWarehouseOnlyTrendChart()">
+                <select id="allMetricSelect" onchange="renderAllTrendChart()">
                     <option value="allDiffAmt">盤盈虧金額 ($)</option>
                     <option value="allAbsDiffAmt">盤盈虧金額(絕對值) ($)</option>
                     <option value="allDiffQty">盤盈虧數量</option>
@@ -595,20 +609,6 @@
 
         <div style="position: relative; height:480px; width:100%; margin-bottom: 24px;">
             <canvas id="allTrendChartCanvas"></canvas>
-        </div>
-
-        <hr style="border:0; border-top:1px solid #e2e8f0; margin:24px 0;">
-        <h3 style="margin:0 0 12px 0;">🌐 全廠 ALL 獨立趨勢圖</h3>
-        <p style="color:#64748b; font-size:0.88rem; margin-top:0;">只呈現全廠整體數據，方便單獨觀察全廠每期變化；指標沿用上方選擇。</p>
-        <div style="position: relative; height:360px; width:100%; margin-bottom: 28px;">
-            <canvas id="allOnlyTrendChartCanvas"></canvas>
-        </div>
-
-        <hr style="border:0; border-top:1px solid #e2e8f0; margin:24px 0;">
-        <h3 style="margin:0 0 12px 0;">🏭 各倉獨立趨勢圖</h3>
-        <p style="color:#64748b; font-size:0.88rem; margin-top:0;">只呈現上方勾選的倉庫，不包含全廠 ALL；指標沿用上方選擇。</p>
-        <div style="position: relative; height:420px; width:100%; margin-bottom: 28px;">
-            <canvas id="warehouseOnlyTrendChartCanvas"></canvas>
         </div>
 
         <h4 style="margin-bottom: 10px;">📋 全廠 (ALL) 歷次 KPI 總表數據 (含各期間隔天數)</h4>
@@ -782,8 +782,6 @@ function verifyStartupPassword() {
             updateUI();
             if (trendChartObj) trendChartObj.resize();
             if (allTrendChartObj) allTrendChartObj.resize();
-            if (allOnlyTrendChartObj) allOnlyTrendChartObj.resize();
-            if (warehouseOnlyTrendChartObj) warehouseOnlyTrendChartObj.resize();
         }, 100);
     } else {
         errorMsg.innerText = "❌ 密碼錯誤，請重新輸入！";
@@ -846,8 +844,6 @@ let historySessions = [];
 let selectedSessionId = null;
 let trendChartObj = null;
 let allTrendChartObj = null;
-let allOnlyTrendChartObj = null;
-let warehouseOnlyTrendChartObj = null;
 
 // 所有來自 Excel / Firestore 的文字在插入 HTML 前都必須先跳脫。
 function escapeHTML(value) {
@@ -1320,8 +1316,6 @@ function updateUI() {
     initWarehouseCheckboxes();
     renderTrendChart();
     renderAllTrendChart();
-    renderAllOnlyTrendChart();
-    renderWarehouseOnlyTrendChart();
     renderMatrixTable();
     renderAllKpiMatrixTable();
     renderSingleSession();
@@ -1377,7 +1371,7 @@ function initWarehouseCheckboxes() {
         label2.className = 'wh-checkbox-item';
         const input2 = document.createElement('input');
         input2.type = 'checkbox'; input2.value = whName;
-        input2.addEventListener('change', () => { renderAllTrendChart(); renderWarehouseOnlyTrendChart(); });
+        input2.addEventListener('change', renderAllTrendChart);
         const swatch2 = document.createElement('span');
         swatch2.style.color = color; swatch2.style.fontWeight = 'bold'; swatch2.textContent = '■';
         label2.append(input2, document.createTextNode(' '), swatch2, document.createTextNode(' ' + whName));
@@ -1395,7 +1389,6 @@ function selectAllCompareWarehouses(checked) {
     const checkboxes = document.querySelectorAll('#allWhCompareCheckboxContainer input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = checked);
     renderAllTrendChart();
-    renderWarehouseOnlyTrendChart();
 }
 
 // 產生帶有間隔天數的圖表 X 軸多行標籤
@@ -1649,71 +1642,6 @@ function getWarehouseMetricValue(item, metric) {
     if (metric === 'allAmtPct') return item.stockAmt ? (item.diffAmt / item.stockAmt) * 100 : 0;
     if (metric === 'allAbsAmtPct') return item.stockAmt ? (item.absDiffAmt / item.stockAmt) * 100 : 0;
     return 0;
-}
-
-function commonIndependentChartOptions(metric) {
-    return {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { tooltip: { mode: 'index', intersect: false }, legend: { position: 'top' } },
-        scales: {
-            x: { title: { display: true, text: '盤點期別與間隔天數' } },
-            y: { title: { display: true, text: metric.includes('Pct') ? '百分比 (%)' : (metric.includes('Amt') ? '金額 ($)' : '數量') } }
-        }
-    };
-}
-
-function renderAllOnlyTrendChart() {
-    const activeSessions = historySessions.filter(s => s.enabled !== false);
-    const canvas = document.getElementById('allOnlyTrendChartCanvas');
-    if (!canvas) return;
-    if (!activeSessions.length) { if (allOnlyTrendChartObj) allOnlyTrendChartObj.destroy(); allOnlyTrendChartObj = null; return; }
-    const metric = document.getElementById('allMetricSelect').value;
-    if (allOnlyTrendChartObj) allOnlyTrendChartObj.destroy();
-    const allValues = activeSessions.map(s => getAllMetricValue(s.overallKPI, metric));
-    const allDatasets = [{
-        label: '🌐 全廠 (ALL)', data: allValues,
-        borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.12)',
-        fill: true, tension: 0.2, borderWidth: 3, pointRadius: 5
-    }];
-    const allTrendLine = buildLinearTrendDataset('🌐 全廠 (ALL)', allValues, '#0f766e', metric);
-    if (allTrendLine) allDatasets.push(allTrendLine);
-    allOnlyTrendChartObj = new Chart(canvas.getContext('2d'), {
-        type: 'line',
-        data: { labels: activeSessions.map(formatChartAxisLabel), datasets: allDatasets },
-        options: commonIndependentChartOptions(metric)
-    });
-}
-
-function renderWarehouseOnlyTrendChart() {
-    const activeSessions = historySessions.filter(s => s.enabled !== false);
-    const canvas = document.getElementById('warehouseOnlyTrendChartCanvas');
-    if (!canvas) return;
-    if (!activeSessions.length) { if (warehouseOnlyTrendChartObj) warehouseOnlyTrendChartObj.destroy(); warehouseOnlyTrendChartObj = null; return; }
-    const metric = document.getElementById('allMetricSelect').value;
-    const checkedBoxes = Array.from(document.querySelectorAll('#allWhCompareCheckboxContainer input[type="checkbox"]:checked')).map(cb => cb.value);
-    const datasets = [];
-    getAllWarehouseNames().forEach((whName, idx) => {
-        if (!checkedBoxes.includes(whName)) return;
-        const values = activeSessions.map(session => {
-            let item = session.warehouseSummary.find(w => String(w.warehouse).trim() === String(whName).trim());
-            if (!item) item = session.warehouseSummary.find(w => String(w.warehouse).includes(whName) || whName.includes(String(w.warehouse)));
-            if (!item || (item.count === 0 && item.stockQty === 0)) return null;
-            return getWarehouseMetricValue(item, metric);
-        });
-        datasets.push({
-            label: whName, data: values,
-            borderColor: chartColors[idx % chartColors.length], backgroundColor: chartColors[idx % chartColors.length],
-            fill: false, tension: 0.15, borderWidth: 2, pointRadius: 4
-        });
-    });
-    const warehouseTrendLines = datasets.map(ds => buildLinearTrendDataset(ds.label, ds.data, ds.borderColor, metric)).filter(Boolean);
-    datasets.push(...warehouseTrendLines);
-    if (warehouseOnlyTrendChartObj) warehouseOnlyTrendChartObj.destroy();
-    warehouseOnlyTrendChartObj = new Chart(canvas.getContext('2d'), {
-        type: 'line', data: { labels: activeSessions.map(formatChartAxisLabel), datasets },
-        options: commonIndependentChartOptions(metric)
-    });
 }
 
 function renderAllKpiMatrixTable() {
@@ -2045,8 +1973,6 @@ async function clearAllHistory() {
         localStorage.removeItem("inventory_history_v27");
         if (trendChartObj) { trendChartObj.destroy(); trendChartObj = null; }
         if (allTrendChartObj) { allTrendChartObj.destroy(); allTrendChartObj = null; }
-        if (allOnlyTrendChartObj) { allOnlyTrendChartObj.destroy(); allOnlyTrendChartObj = null; }
-        if (warehouseOnlyTrendChartObj) { warehouseOnlyTrendChartObj.destroy(); warehouseOnlyTrendChartObj = null; }
         updateUI();
         alert(`✅ 本機與雲端歷史紀錄已清空（刪除 ${docs.length} 筆雲端文件）。`);
     } catch (err) {
@@ -2125,8 +2051,6 @@ function switchMainTab(tabName) {
         document.getElementById('allTrendTab').style.display = 'block';
         setTimeout(() => {
             if (allTrendChartObj) allTrendChartObj.resize();
-            if (allOnlyTrendChartObj) allOnlyTrendChartObj.resize();
-            if (warehouseOnlyTrendChartObj) warehouseOnlyTrendChartObj.resize();
         }, 80);
     } else if (tabName === 'single') {
         document.querySelectorAll('.tab-btn')[2].classList.add('active');
