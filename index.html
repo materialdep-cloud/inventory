@@ -718,7 +718,7 @@
     <!-- Main Tab 3: 明細篩選 -->
     <div id="detailTab" class="card" style="display: none;">
         <div class="filter-bar">
-            <select id="detailSessionSelect" onchange="renderDetailTable()"></select>
+            <select id="detailSessionSelect" onchange="handleDetailSessionChange()"></select>
             <input type="text" id="searchInput" placeholder="搜尋品項名稱/代號..." oninput="renderDetailTable()">
             <select id="warehouseFilter" onchange="renderDetailTable()">
                 <option value="">全部倉庫</option>
@@ -1809,39 +1809,56 @@ function renderSingleSession() {
     renderDetailTable();
 }
 
+function normalizeDetailWarehouse(value) {
+    return String(value || '').replace(/[\s　]/g, '').trim();
+}
+
+function handleDetailSessionChange() {
+    const selId = document.getElementById('detailSessionSelect').value || selectedSessionId;
+    const session = historySessions.find(s => s.id === selId);
+    populateWarehouseFilter(session);
+    renderDetailTable();
+}
+
 function populateWarehouseFilter(session) {
     const select = document.getElementById('warehouseFilter');
     const oldWarehouse = select.value;
     select.innerHTML = '<option value="">全部倉庫</option>';
     if (!session) return;
 
-    // 明細查詢的倉別選單以該期原始明細為準，避免 warehouseSummary
-    // 未收錄「二廠待處理倉」等倉別時，使用者無法從下拉選單選取。
-    const warehouseNames = new Set();
+    const warehouseNames = new Map();
+    const addWarehouse = (value) => {
+        const name = String(value || '').replace(/[\r\n]/g, ' ').trim();
+        const key = normalizeDetailWarehouse(name);
+        if (!key || excludedWarehouses.some(ex => key.includes(normalizeDetailWarehouse(ex)))) return;
+        if (!warehouseNames.has(key)) warehouseNames.set(key, name);
+    };
+
+    // 以目前明細所選期數的原始資料為主，逐筆收集所有實際出現的倉別。
     (session.rawData || []).forEach(item => {
-        if (!item.warehouse) return;
-        if (excludedWarehouses.some(ex => item.warehouse.includes(ex))) return;
-        let currentWH = String(item.warehouse).trim();
-        const code = String(item.code || '').toUpperCase();
+        let currentWH = String(item.warehouse || '').trim();
+        const code = String(item.code || '').trim().toUpperCase();
         if (currentWH.includes('理貨倉') && code.startsWith('Z')) currentWH = '理貨倉(包材)';
         else if (currentWH.includes('包裝/原料倉') && code.startsWith('Z')) currentWH = '包裝/原料倉(包材)';
-        warehouseNames.add(currentWH);
+        addWarehouse(currentWH);
     });
 
-    // 同時補入彙總資料中存在、但原始明細掃描未涵蓋的倉別。
-    (session.warehouseSummary || []).forEach(w => {
-        if (w.warehouse && w.count > 0 && !excludedWarehouses.some(ex => w.warehouse.includes(ex))) {
-            warehouseNames.add(w.warehouse);
-        }
-    });
+    // 彙總資料補漏；不以 count > 0 作為顯示條件，避免零筆或零數量倉別被漏掉。
+    (session.warehouseSummary || []).forEach(w => addWarehouse(w.warehouse));
 
-    [...warehouseNames].sort((a, b) => String(a).localeCompare(String(b), 'zh-Hant')).forEach(name => {
+    // 固定提供此倉別選項；若該期有資料，會以標準化名稱比對空白差異。
+    addWarehouse('二廠待處理倉');
+
+    [...warehouseNames.entries()].sort((a, b) => a[1].localeCompare(b[1], 'zh-Hant')).forEach(([key, name]) => {
         const opt = document.createElement('option');
         opt.value = name;
         opt.textContent = name;
+        opt.dataset.normalized = key;
         select.appendChild(opt);
     });
-    if (warehouseNames.has(oldWarehouse)) select.value = oldWarehouse;
+    const oldKey = normalizeDetailWarehouse(oldWarehouse);
+    const matchingOption = [...select.options].find(o => normalizeDetailWarehouse(o.value) === oldKey);
+    if (oldWarehouse && matchingOption) select.value = matchingOption.value;
 
     const categorySelect = document.getElementById('categoryFilter');
     const oldCategory = categorySelect.value;
@@ -1896,7 +1913,7 @@ function renderDetailTable() {
         else if (item.warehouse.includes("包裝/原料倉") && item.code.toUpperCase().startsWith("Z")) currentWH = "包裝/原料倉(包材)";
 
         const matchSearch = item.name.toLowerCase().includes(search) || item.code.toLowerCase().includes(search);
-        const matchWH = !whFilter || currentWH === whFilter || item.warehouse === whFilter;
+        const matchWH = !whFilter || normalizeDetailWarehouse(currentWH) === normalizeDetailWarehouse(whFilter) || normalizeDetailWarehouse(item.warehouse) === normalizeDetailWarehouse(whFilter);
         let matchDiff = true;
 
         if (diffFilter === 'diff') matchDiff = item.diffQty !== 0;
