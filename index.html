@@ -696,11 +696,11 @@
                     <thead>
                         <tr>
                             <th>ＡＬＬ</th>
-                            <th class="detail-sort-header" data-sort="stockQty" onclick="sortDetailBy('stockQty')" style="cursor:pointer;white-space:nowrap;">庫存數量 ↕</th>
-                            <th class="detail-sort-header" data-sort="checkQty" onclick="sortDetailBy('checkQty')" style="cursor:pointer;white-space:nowrap;">盤點數量 ↕</th>
-                            <th class="detail-sort-header" data-sort="diffQty" onclick="sortDetailBy('diffQty')" style="cursor:pointer;white-space:nowrap;">盤盈虧數量 ↕</th>
-                            <th class="detail-sort-header" data-sort="diffAmt" onclick="sortDetailBy('diffAmt')" style="cursor:pointer;white-space:nowrap;">盤盈虧金額 ↕</th>
-                            <th class="detail-sort-header" data-sort="stockAmt" onclick="sortDetailBy('stockAmt')" style="cursor:pointer;white-space:nowrap;">庫存金額 ↕</th>
+                            <th>庫存數量</th>
+                            <th>盤點數量</th>
+                            <th>盤盈虧數量</th>
+                            <th>盤盈虧金額</th>
+                            <th>庫存金額</th>
                             <th class="col-abs-qty">盤盈虧數量<br>(絕對值)</th>
                             <th class="col-qty-pct">盤盈虧數量%</th>
                             <th class="col-abs-qty-pct">盤盈虧數量<br>(絕對值)%</th>
@@ -737,7 +737,7 @@
             <button type="button" class="export-btn" style="padding:6px 12px;" onclick="resetDetailFilters()">清除篩選</button>
             <span id="detailResultCount" style="font-weight:bold;color:#475569;">符合 0 筆</span>
         </div>
-        <div style="font-size:0.8rem;color:#64748b;margin:-8px 0 10px;">提示：點擊表格欄位標題可排序，再點一次可切換升冪／降冪。</div>
+        <div style="font-size:0.8rem;color:#64748b;margin:-8px 0 10px;">提示：點擊明細表格欄位標題可排序；數量與金額欄位採數值排序，再點一次可切換升冪／降冪。</div>
         <div class="table-responsive">
             <table class="sheet-table" id="detailTable">
                 <thead>
@@ -749,12 +749,12 @@
                         <th class="detail-sort-header" data-sort="name" onclick="sortDetailBy('name')" style="cursor:pointer;white-space:nowrap;">品項名稱 ↕</th>
                         <th class="detail-sort-header" data-sort="unit" onclick="sortDetailBy('unit')" style="cursor:pointer;white-space:nowrap;">單位 ↕</th>
                         <th class="detail-sort-header" data-sort="warehouse" onclick="sortDetailBy('warehouse')" style="cursor:pointer;white-space:nowrap;">倉庫 ↕</th>
-                        <th>庫存數量</th>
-                        <th>盤點數量</th>
-                        <th>盤盈虧數量</th>
+                        <th class="detail-sort-header" data-sort="stockQty" onclick="sortDetailBy('stockQty')" style="cursor:pointer;white-space:nowrap;">庫存數量 ↕</th>
+                        <th class="detail-sort-header" data-sort="checkQty" onclick="sortDetailBy('checkQty')" style="cursor:pointer;white-space:nowrap;">盤點數量 ↕</th>
+                        <th class="detail-sort-header" data-sort="diffQty" onclick="sortDetailBy('diffQty')" style="cursor:pointer;white-space:nowrap;">盤盈虧數量 ↕</th>
                         <th class="detail-sort-header" data-sort="cost" onclick="sortDetailBy('cost')" style="cursor:pointer;white-space:nowrap;">單位成本 ↕</th>
-                        <th>盤盈虧金額</th>
-                        <th>庫存金額</th>
+                        <th class="detail-sort-header" data-sort="diffAmt" onclick="sortDetailBy('diffAmt')" style="cursor:pointer;white-space:nowrap;">盤盈虧金額 ↕</th>
+                        <th class="detail-sort-header" data-sort="stockAmt" onclick="sortDetailBy('stockAmt')" style="cursor:pointer;white-space:nowrap;">庫存金額 ↕</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
