@@ -1472,6 +1472,56 @@ function renderTrendChart() {
     });
 }
 
+// 以線性回歸計算「整體趨勢直線」，不改動原始每期數據。
+// 絕對值指標越低越好：趨勢線下降=改善、上升=惡化。
+function buildLinearTrendDataset(label, values, color, metric) {
+    const points = values.map((value, index) => ({ x: index, y: value }))
+        .filter(p => Number.isFinite(Number(p.y)) && p.y !== null && p.y !== '');
+    if (points.length < 2) return null;
+
+    const n = points.length;
+    const meanX = points.reduce((sum, p) => sum + p.x, 0) / n;
+    const meanY = points.reduce((sum, p) => sum + Number(p.y), 0) / n;
+    let numerator = 0, denominator = 0;
+    points.forEach(p => {
+        numerator += (p.x - meanX) * (Number(p.y) - meanY);
+        denominator += (p.x - meanX) ** 2;
+    });
+    if (!denominator) return null;
+
+    const slope = numerator / denominator;
+    const intercept = meanY - slope * meanX;
+    const firstX = points[0].x;
+    const lastX = points[points.length - 1].x;
+    const firstY = intercept + slope * firstX;
+    const lastY = intercept + slope * lastX;
+    const tolerance = Math.max(1e-9, Math.abs(meanY) * 0.005);
+    const delta = lastY - firstY;
+    const isAbsoluteMetric = /Abs|abs/.test(metric);
+    let direction;
+    if (Math.abs(delta) <= tolerance) direction = '持平';
+    else if (isAbsoluteMetric) direction = delta < 0 ? '改善' : '惡化';
+    else direction = delta < 0 ? '下降' : '上升';
+
+    const trendValues = values.map((_, index) =>
+        index < firstX || index > lastX ? null : intercept + slope * index
+    );
+    return {
+        label: `${label}｜直線趨勢：${direction}`,
+        data: trendValues,
+        borderColor: color,
+        backgroundColor: color,
+        borderDash: [10, 6],
+        borderWidth: 3,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        fill: false,
+        tension: 0,
+        spanGaps: true,
+        order: 0
+    };
+}
+
 function renderAllTrendChart() {
     const activeSessions = historySessions.filter(s => s.enabled !== false);
     if (activeSessions.length === 0) return;
@@ -1549,6 +1599,10 @@ function renderAllTrendChart() {
         });
     });
 
+    // 每條實際數據線都加上一條直線趨勢線，直接疊在同一張圖上。
+    const trendDatasets = datasets.map(ds => buildLinearTrendDataset(ds.label, ds.data, ds.borderColor, metric)).filter(Boolean);
+    datasets.push(...trendDatasets);
+
     const ctx = document.getElementById('allTrendChartCanvas').getContext('2d');
     if (allTrendChartObj) allTrendChartObj.destroy();
 
@@ -1616,17 +1670,17 @@ function renderAllOnlyTrendChart() {
     if (!activeSessions.length) { if (allOnlyTrendChartObj) allOnlyTrendChartObj.destroy(); allOnlyTrendChartObj = null; return; }
     const metric = document.getElementById('allMetricSelect').value;
     if (allOnlyTrendChartObj) allOnlyTrendChartObj.destroy();
+    const allValues = activeSessions.map(s => getAllMetricValue(s.overallKPI, metric));
+    const allDatasets = [{
+        label: '🌐 全廠 (ALL)', data: allValues,
+        borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.12)',
+        fill: true, tension: 0.2, borderWidth: 3, pointRadius: 5
+    }];
+    const allTrendLine = buildLinearTrendDataset('🌐 全廠 (ALL)', allValues, '#0f766e', metric);
+    if (allTrendLine) allDatasets.push(allTrendLine);
     allOnlyTrendChartObj = new Chart(canvas.getContext('2d'), {
         type: 'line',
-        data: {
-            labels: activeSessions.map(formatChartAxisLabel),
-            datasets: [{
-                label: '🌐 全廠 (ALL)',
-                data: activeSessions.map(s => getAllMetricValue(s.overallKPI, metric)),
-                borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.12)',
-                fill: true, tension: 0.2, borderWidth: 3, pointRadius: 5
-            }]
-        },
+        data: { labels: activeSessions.map(formatChartAxisLabel), datasets: allDatasets },
         options: commonIndependentChartOptions(metric)
     });
 }
@@ -1653,6 +1707,8 @@ function renderWarehouseOnlyTrendChart() {
             fill: false, tension: 0.15, borderWidth: 2, pointRadius: 4
         });
     });
+    const warehouseTrendLines = datasets.map(ds => buildLinearTrendDataset(ds.label, ds.data, ds.borderColor, metric)).filter(Boolean);
+    datasets.push(...warehouseTrendLines);
     if (warehouseOnlyTrendChartObj) warehouseOnlyTrendChartObj.destroy();
     warehouseOnlyTrendChartObj = new Chart(canvas.getContext('2d'), {
         type: 'line', data: { labels: activeSessions.map(formatChartAxisLabel), datasets },
