@@ -1811,16 +1811,38 @@ function renderSingleSession() {
 
 function populateWarehouseFilter(session) {
     const select = document.getElementById('warehouseFilter');
+    const oldWarehouse = select.value;
     select.innerHTML = '<option value="">全部倉庫</option>';
     if (!session) return;
-    session.warehouseSummary.forEach(w => {
-        if (w.count > 0 && !excludedWarehouses.some(ex => w.warehouse.includes(ex))) {
-            const opt = document.createElement('option');
-            opt.value = w.warehouse;
-            opt.textContent = w.warehouse;
-            select.appendChild(opt);
+
+    // 明細查詢的倉別選單以該期原始明細為準，避免 warehouseSummary
+    // 未收錄「二廠待處理倉」等倉別時，使用者無法從下拉選單選取。
+    const warehouseNames = new Set();
+    (session.rawData || []).forEach(item => {
+        if (!item.warehouse) return;
+        if (excludedWarehouses.some(ex => item.warehouse.includes(ex))) return;
+        let currentWH = String(item.warehouse).trim();
+        const code = String(item.code || '').toUpperCase();
+        if (currentWH.includes('理貨倉') && code.startsWith('Z')) currentWH = '理貨倉(包材)';
+        else if (currentWH.includes('包裝/原料倉') && code.startsWith('Z')) currentWH = '包裝/原料倉(包材)';
+        warehouseNames.add(currentWH);
+    });
+
+    // 同時補入彙總資料中存在、但原始明細掃描未涵蓋的倉別。
+    (session.warehouseSummary || []).forEach(w => {
+        if (w.warehouse && w.count > 0 && !excludedWarehouses.some(ex => w.warehouse.includes(ex))) {
+            warehouseNames.add(w.warehouse);
         }
     });
+
+    [...warehouseNames].sort((a, b) => String(a).localeCompare(String(b), 'zh-Hant')).forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+    });
+    if (warehouseNames.has(oldWarehouse)) select.value = oldWarehouse;
+
     const categorySelect = document.getElementById('categoryFilter');
     const oldCategory = categorySelect.value;
     const categories = [...new Set((session.rawData || []).map(x => x.category).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b),'zh-Hant'));
