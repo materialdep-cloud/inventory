@@ -950,6 +950,15 @@ const defaultWhOrder = [
 
 const excludedWarehouses = ["產地包材倉", "驗證包材倉"];
 
+// 結餘差異校正專用排除倉別：不影響原盤盈虧其他功能
+function isExcludedAdjustmentWarehouse(value) {
+    const warehouse = normalizeAdjustmentKeyPart(value);
+    return excludedWarehouses.some(ex => warehouse.includes(ex))
+        || warehouse.startsWith('廠商')
+        || warehouse.startsWith('寄銷')
+        || warehouse === '物流資材倉';
+}
+
 const chartColors = [
     '#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316',
     '#6366f1', '#84cc16', '#06b6d4', '#d946ef', '#64748b', '#059669', '#b91c1c', '#4338ca', '#38bdf8'
@@ -2231,8 +2240,11 @@ function normalizeAdjustmentKeyPart(value) {
     return String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 }
 
-function adjustmentKey(code, warehouse, spec) {
-    return normalizeAdjustmentKeyPart(code) + '||' + normalizeAdjustmentKeyPart(warehouse) + '||' + normalizeAdjustmentKeyPart(spec);
+function adjustmentKey(code, name, warehouse, spec) {
+    return normalizeAdjustmentKeyPart(code) + '||'
+        + normalizeAdjustmentKeyPart(name) + '||'
+        + normalizeAdjustmentKeyPart(warehouse) + '||'
+        + normalizeAdjustmentKeyPart(spec);
 }
 
 function showAdjustmentMessage(message, type = 'info') {
@@ -2289,26 +2301,33 @@ function parseBalanceWorkbook(file) {
                 let col = {};
                 for (let i = 0; i < Math.min(rows.length, 30); i++) {
                     const headers = (rows[i] || []).map(v => normalizeAdjustmentKeyPart(v).replace(/\s/g, ''));
-                    const find = keys => headers.findIndex(h => keys.some(k => h.includes(k)));
-                    const candidate = {
-                        code: find(['品項代號', '料號', '品號']),
-                        name: find(['品項名稱', '品項', '品名']),
-                        unit: find(['庫存單位', '單位']),
-                        spec: find(['規格', '包裝規格']),
-                        warehouse: find(['倉庫', '倉別']),
-                        qty: find(['庫存量', '庫存數量', '結餘數量', '庫存數'])
+                    const findExactOrPartial = (exactNames, partialNames = []) => {
+                        let idx = headers.findIndex(h => exactNames.includes(h));
+                        if (idx >= 0) return idx;
+                        return headers.findIndex(h => partialNames.some(k => h.includes(k))
+                            && !['代號', '料號', '品號', '編號'].some(bad => h.includes(bad)));
                     };
-                    if (candidate.code >= 0 && candidate.warehouse >= 0 && candidate.qty >= 0) {
+                    const find = keys => findExactOrPartial(keys, keys);
+                    const candidate = {
+                        code: findExactOrPartial(['品項代號', '料號', '品號'], ['品項代號', '料號', '品號']),
+                        // 品名欄先找完整標題，避免「品項」誤命中「品項代號」
+                        name: findExactOrPartial(['品項名稱', '品名', '商品名稱', '產品名稱'], ['品項名稱', '商品名稱', '產品名稱', '品名']),
+                        unit: findExactOrPartial(['庫存單位', '單位'], ['庫存單位', '單位']),
+                        spec: findExactOrPartial(['規格', '包裝規格'], ['規格', '包裝規格']),
+                        warehouse: findExactOrPartial(['倉庫', '倉別'], ['倉庫', '倉別']),
+                        qty: findExactOrPartial(['庫存量', '庫存數量', '結餘數量', '庫存數'], ['庫存量', '庫存數量', '結餘數量', '庫存數'])
+                    };
+                    if (candidate.code >= 0 && candidate.name >= 0 && candidate.warehouse >= 0 && candidate.qty >= 0) {
                         headerIndex = i; col = candidate; break;
                     }
                 }
-                if (headerIndex < 0) throw new Error('找不到必要欄位。需要：品項代號、倉庫、庫存量；品項與單位可選。');
+                if (headerIndex < 0) throw new Error('找不到必要欄位。需要：品項代號、品項名稱、倉庫、庫存量；規格與單位可選。');
                 const records = [];
                 for (let i = headerIndex + 1; i < rows.length; i++) {
                     const row = rows[i] || [];
                     const code = normalizeAdjustmentKeyPart(row[col.code]);
                     const warehouse = normalizeAdjustmentKeyPart(row[col.warehouse]);
-                    if (!code || !warehouse || excludedWarehouses.some(ex => warehouse.includes(ex))) continue;
+                    if (!code || !warehouse || isExcludedAdjustmentWarehouse(warehouse)) continue;
                     const qtyText = String(row[col.qty] ?? '').replace(/[$,\s\tNT]/g, '');
                     const qty = Number.parseFloat(qtyText);
                     if (!Number.isFinite(qty)) continue;
@@ -2342,15 +2361,15 @@ async function previewBalanceAdjustment() {
     if (btn) { btn.disabled = true; btn.textContent = '讀取比對中…'; }
     try {
         const parsed = await parseBalanceWorkbook(file);
-        const oldRows = (session.rawData || []).filter(r => normalizeAdjustmentKeyPart(r.code) && normalizeAdjustmentKeyPart(r.warehouse));
+        const oldRows = (session.rawData || []).filter(r => normalizeAdjustmentKeyPart(r.code) && normalizeAdjustmentKeyPart(r.warehouse) && !isExcludedAdjustmentWarehouse(r.warehouse));
         const oldMap = new Map(), newMap = new Map();
         oldRows.forEach(row => {
-            const key = adjustmentKey(row.code, row.warehouse, row.spec || row.unit);
+            const key = adjustmentKey(row.code, row.name, row.warehouse, row.spec || row.unit);
             if (!oldMap.has(key)) oldMap.set(key, []);
             oldMap.get(key).push(row);
         });
         parsed.records.forEach(row => {
-            const key = adjustmentKey(row.code, row.warehouse, row.spec || row.unit);
+            const key = adjustmentKey(row.code, row.name, row.warehouse, row.spec || row.unit);
             if (!newMap.has(key)) newMap.set(key, []);
             newMap.get(key).push(row);
         });
@@ -2358,7 +2377,7 @@ async function previewBalanceAdjustment() {
         const result = [];
         const seenNewKeys = new Set();
         oldRows.forEach(old => {
-            const key = adjustmentKey(old.code, old.warehouse, old.spec || old.unit);
+            const key = adjustmentKey(old.code, old.name, old.warehouse, old.spec || old.unit);
             const oldGroup = oldMap.get(key) || [];
             const newGroup = newMap.get(key) || [];
             if (oldGroup.length > 1 || newGroup.length > 1) {
@@ -2413,7 +2432,7 @@ async function previewBalanceAdjustment() {
         });
 
         parsed.records.forEach(newer => {
-            const key = adjustmentKey(newer.code, newer.warehouse, newer.spec || newer.unit);
+            const key = adjustmentKey(newer.code, newer.name, newer.warehouse, newer.spec || newer.unit);
             if (seenNewKeys.has(key) || oldMap.has(key)) return;
             result.push({
                 status: '原盤點無此項', exception: true, code: newer.code, name: newer.name,
