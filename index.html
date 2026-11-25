@@ -1146,6 +1146,7 @@ async function parseSheetData(rows, fileName) {
     const cCode = getCol(['品項代號', '料號', '品號']);
     const cName = getCol(['品項名稱', '品名']);
     const cUnit = getCol(['庫存單位', '單位']);
+    const cSpec = getCol(['規格', '包裝規格']);
     const cWH = getCol(['倉庫', '倉別', 'ＡＬＬ', 'ALL']);
     const cStockQty = getCol(['庫存數量', '庫存數']);
     const cCheckQty = getCol(['盤點數量', '盤點數', '實盤數']);
@@ -1199,6 +1200,7 @@ async function parseSheetData(rows, fileName) {
             code: codeStr,
             name: nameStr,
             unit: cUnit !== -1 ? row[cUnit] || '' : '',
+            spec: cSpec !== -1 ? row[cSpec] || '' : '',
             warehouse: whStr,
             stockQty: stockQty,
             checkQty: checkQty,
@@ -2229,8 +2231,8 @@ function normalizeAdjustmentKeyPart(value) {
     return String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 }
 
-function adjustmentKey(code, warehouse) {
-    return normalizeAdjustmentKeyPart(code) + '||' + normalizeAdjustmentKeyPart(warehouse);
+function adjustmentKey(code, warehouse, spec) {
+    return normalizeAdjustmentKeyPart(code) + '||' + normalizeAdjustmentKeyPart(warehouse) + '||' + normalizeAdjustmentKeyPart(spec);
 }
 
 function showAdjustmentMessage(message, type = 'info') {
@@ -2292,6 +2294,7 @@ function parseBalanceWorkbook(file) {
                         code: find(['品項代號', '料號', '品號']),
                         name: find(['品項名稱', '品項', '品名']),
                         unit: find(['庫存單位', '單位']),
+                        spec: find(['規格', '包裝規格']),
                         warehouse: find(['倉庫', '倉別']),
                         qty: find(['庫存量', '庫存數量', '結餘數量', '庫存數'])
                     };
@@ -2305,7 +2308,7 @@ function parseBalanceWorkbook(file) {
                     const row = rows[i] || [];
                     const code = normalizeAdjustmentKeyPart(row[col.code]);
                     const warehouse = normalizeAdjustmentKeyPart(row[col.warehouse]);
-                    if (!code || !warehouse) continue;
+                    if (!code || !warehouse || excludedWarehouses.some(ex => warehouse.includes(ex))) continue;
                     const qtyText = String(row[col.qty] ?? '').replace(/[$,\s\tNT]/g, '');
                     const qty = Number.parseFloat(qtyText);
                     if (!Number.isFinite(qty)) continue;
@@ -2313,6 +2316,7 @@ function parseBalanceWorkbook(file) {
                         code,
                         name: col.name >= 0 ? String(row[col.name] ?? '').trim() : '',
                         unit: col.unit >= 0 ? normalizeAdjustmentKeyPart(row[col.unit]) : '',
+                        spec: col.spec >= 0 ? normalizeAdjustmentKeyPart(row[col.spec]) : (col.unit >= 0 ? normalizeAdjustmentKeyPart(row[col.unit]) : ''),
                         warehouse,
                         stockQty: qty,
                         sourceRow: i + 1
@@ -2341,12 +2345,12 @@ async function previewBalanceAdjustment() {
         const oldRows = (session.rawData || []).filter(r => normalizeAdjustmentKeyPart(r.code) && normalizeAdjustmentKeyPart(r.warehouse));
         const oldMap = new Map(), newMap = new Map();
         oldRows.forEach(row => {
-            const key = adjustmentKey(row.code, row.warehouse);
+            const key = adjustmentKey(row.code, row.warehouse, row.spec || row.unit);
             if (!oldMap.has(key)) oldMap.set(key, []);
             oldMap.get(key).push(row);
         });
         parsed.records.forEach(row => {
-            const key = adjustmentKey(row.code, row.warehouse);
+            const key = adjustmentKey(row.code, row.warehouse, row.spec || row.unit);
             if (!newMap.has(key)) newMap.set(key, []);
             newMap.get(key).push(row);
         });
@@ -2354,7 +2358,7 @@ async function previewBalanceAdjustment() {
         const result = [];
         const seenNewKeys = new Set();
         oldRows.forEach(old => {
-            const key = adjustmentKey(old.code, old.warehouse);
+            const key = adjustmentKey(old.code, old.warehouse, old.spec || old.unit);
             const oldGroup = oldMap.get(key) || [];
             const newGroup = newMap.get(key) || [];
             if (oldGroup.length > 1 || newGroup.length > 1) {
@@ -2409,7 +2413,7 @@ async function previewBalanceAdjustment() {
         });
 
         parsed.records.forEach(newer => {
-            const key = adjustmentKey(newer.code, newer.warehouse);
+            const key = adjustmentKey(newer.code, newer.warehouse, newer.spec || newer.unit);
             if (seenNewKeys.has(key) || oldMap.has(key)) return;
             result.push({
                 status: '原盤點無此項', exception: true, code: newer.code, name: newer.name,
@@ -2518,7 +2522,7 @@ async function saveBalanceAdjustment() {
             originalSessionFileName: adjustmentSourceSession.fileName || '',
             sourceFileName: adjustmentSourceFile.name || '',
             originalSessionKey: adjustmentSourceSession.sessionKey || '',
-            matchRule: '品項代號＋倉庫',
+            matchRule: '品項代號＋倉庫＋規格',
             formula: '校正後盤盈虧＝原盤盈虧－(新結餘－原庫存)＝實盤數量－新結餘',
             createdAtMs: Date.now()
         };
