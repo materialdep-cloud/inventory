@@ -2311,7 +2311,7 @@ function parseBalanceWorkbook(file) {
                     const candidate = {
                         code: findExactOrPartial(['品項代號', '料號', '品號'], ['品項代號', '料號', '品號']),
                         // 品名欄先找完整標題，避免「品項」誤命中「品項代號」
-                        name: findExactOrPartial(['品項名稱', '品名', '商品名稱', '產品名稱'], ['品項名稱', '商品名稱', '產品名稱', '品名']),
+                        name: findExactOrPartial(['品項名稱', '品名', '商品名稱', '產品名稱', '品項'], ['品項名稱', '商品名稱', '產品名稱', '品名', '品項']),
                         unit: findExactOrPartial(['庫存單位', '單位'], ['庫存單位', '單位']),
                         spec: findExactOrPartial(['規格', '包裝規格'], ['規格', '包裝規格']),
                         warehouse: findExactOrPartial(['倉庫', '倉別'], ['倉庫', '倉別']),
