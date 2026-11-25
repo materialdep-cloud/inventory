@@ -2241,10 +2241,10 @@ function normalizeAdjustmentKeyPart(value) {
 }
 
 function adjustmentKey(code, name, warehouse, spec) {
-    return normalizeAdjustmentKeyPart(code) + '||'
-        + normalizeAdjustmentKeyPart(name) + '||'
-        + normalizeAdjustmentKeyPart(warehouse) + '||'
-        + normalizeAdjustmentKeyPart(spec);
+    // 結餘 Excel 的品名可能改名；以品項代號＋倉庫作為穩定鍵。
+    // 品名及規格保留在預覽中作辨識，不因名稱變更而判定為不同品項。
+    return normalizeAdjustmentKeyPart(code).toUpperCase() + '||'
+        + normalizeAdjustmentKeyPart(warehouse);
 }
 
 function showAdjustmentMessage(message, type = 'info') {
@@ -2311,7 +2311,7 @@ function parseBalanceWorkbook(file) {
                     const candidate = {
                         code: findExactOrPartial(['品項代號', '料號', '品號'], ['品項代號', '料號', '品號']),
                         // 品名欄先找完整標題，避免「品項」誤命中「品項代號」
-                        name: findExactOrPartial(['品項名稱', '品名', '商品名稱', '產品名稱', '品項'], ['品項名稱', '商品名稱', '產品名稱', '品名', '品項']),
+                        name: findExactOrPartial(['品項名稱', '品名', '商品名稱', '產品名稱', '品項'], ['品項名稱', '商品名稱', '產品名稱', '品名']),
                         unit: findExactOrPartial(['庫存單位', '單位'], ['庫存單位', '單位']),
                         spec: findExactOrPartial(['規格', '包裝規格'], ['規格', '包裝規格']),
                         warehouse: findExactOrPartial(['倉庫', '倉別'], ['倉庫', '倉別']),
@@ -2422,8 +2422,13 @@ async function previewBalanceAdjustment() {
             const correctedDiffQty = oldDiffQty - deltaQty;
             const cost = Number(old.cost) || 0;
             result.push({
-                status: cost === 0 ? '已校正（成本為0）' : '已校正',
-                exception: false, code: old.code, name: old.name || newer.name,
+                status: normalizeAdjustmentKeyPart(old.name) !== normalizeAdjustmentKeyPart(newer.name)
+                    ? '已校正（品名已變更）'
+                    : (cost === 0 ? '已校正（成本為0）' : '已校正'),
+                exception: false, code: old.code,
+                name: normalizeAdjustmentKeyPart(old.name) !== normalizeAdjustmentKeyPart(newer.name)
+                    ? `${old.name || ''}（結餘品名：${newer.name || ''}）`
+                    : (old.name || newer.name),
                 warehouse: old.warehouse, unit: oldUnit || newUnit, oldStockQty,
                 newStockQty: newer.stockQty, deltaQty, checkQty: Number(old.checkQty) || 0,
                 oldDiffQty, correctedDiffQty, cost,
@@ -2541,7 +2546,7 @@ async function saveBalanceAdjustment() {
             originalSessionFileName: adjustmentSourceSession.fileName || '',
             sourceFileName: adjustmentSourceFile.name || '',
             originalSessionKey: adjustmentSourceSession.sessionKey || '',
-            matchRule: '品項代號＋倉庫＋規格',
+            matchRule: '品項代號＋倉庫（品名變更不影響比對）',
             formula: '校正後盤盈虧＝原盤盈虧－(新結餘－原庫存)＝實盤數量－新結餘',
             createdAtMs: Date.now()
         };
