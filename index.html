@@ -482,6 +482,7 @@
         <button class="tab-btn" onclick="switchMainTab('single')">📊 單期各倉別對比</button>
         <button class="tab-btn" onclick="switchMainTab('detail')">📋 品項盤盈虧明細查詢</button>
         <button class="tab-btn" onclick="switchMainTab('manage')">⚙️ 歷次紀錄管理(需密碼)</button>
+        <button class="tab-btn" onclick="switchMainTab('adjustment')">🧮 結餘差異校正</button>
     </div>
 
     <!-- Main Tab 1: 歷次倉別趨勢圖表 -->
@@ -769,6 +770,76 @@
         <div id="historyChipsArea" style="margin-bottom: 20px;"></div>
         <button class="export-btn" style="background:#ef4444;" onclick="clearAllHistory()">🔥 清除全歷史紀錄 (需密碼)</button>
     </div>
+    <!-- Main Tab 5: 結餘差異校正 -->
+    <div id="adjustmentTab" class="card" style="display:none;">
+        <h3>🧮 結餘差異校正</h3>
+        <p style="color:#64748b;line-height:1.7;margin-top:4px;">
+            選擇既有盤點期別，再上傳該期的新庫存結餘 Excel。系統以「品項代號＋倉庫」比對，原始盤點資料不會被覆蓋。
+        </p>
+
+        <div style="padding:14px 16px;border:1px solid #bfdbfe;border-left:5px solid #2563eb;border-radius:8px;background:#eff6ff;color:#1e3a8a;line-height:1.75;margin:14px 0;">
+            <strong>校正公式：</strong><br>
+            結餘差額＝新結餘數量－原庫存數量<br>
+            校正後盤盈虧＝原盤盈虧－結餘差額＝實盤數量－新結餘數量<br>
+            校正後金額＝校正後盤盈虧 × 原盤點單位成本
+        </div>
+
+        <div class="filter-bar" style="align-items:flex-end;">
+            <label style="min-width:280px;flex:1;">選擇原盤點期別
+                <select id="adjustmentSessionSelect" style="width:100%;margin-top:5px;"></select>
+            </label>
+            <label style="min-width:260px;flex:1;">上傳新的庫存結餘 Excel
+                <input type="file" id="adjustmentFileInput" accept=".xlsx,.xls" style="display:block;width:100%;margin-top:5px;">
+            </label>
+            <button class="upload-btn" style="margin-top:0;" onclick="previewBalanceAdjustment()">🔍 開始比對與預覽</button>
+        </div>
+
+        <div id="adjustmentFileInfo" style="color:#64748b;font-size:.85rem;margin:6px 0 12px;">尚未選擇結餘檔案。</div>
+        <div id="adjustmentMessage" style="display:none;padding:10px 14px;border-radius:8px;margin:10px 0;line-height:1.6;"></div>
+
+        <div id="adjustmentSummary" style="display:none;">
+            <div class="formula-card-grid" style="margin:14px 0;">
+                <div class="formula-badge-item f-qty"><strong>成功配對</strong><div id="adjMatchedCount" style="font-size:1.35rem;">0</div></div>
+                <div class="formula-badge-item f-amt"><strong>校正後盤盈虧金額</strong><div id="adjCorrectedAmount" style="font-size:1.35rem;">$0</div></div>
+                <div class="formula-badge-item f-abs-qty"><strong>需人工確認</strong><div id="adjExceptionCount" style="font-size:1.35rem;">0</div></div>
+                <div class="formula-badge-item f-abs-amt"><strong>校正後盤盈虧金額絕對值</strong><div id="adjAbsAmount" style="font-size:1.35rem;">$0</div></div>
+            </div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0;">
+                <label>顯示資料
+                    <select id="adjustmentStatusFilter" onchange="renderAdjustmentPreview()" style="margin-left:5px;">
+                        <option value="all">全部</option>
+                        <option value="corrected">成功校正</option>
+                        <option value="exception">需人工確認</option>
+                    </select>
+                </label>
+                <span id="adjustmentRowCount" style="color:#64748b;font-weight:600;"></span>
+                <button class="export-btn" style="margin-left:auto;" onclick="exportAdjustmentExcel()">📥 匯出校正結果 Excel</button>
+            </div>
+
+            <div class="table-responsive" style="max-height:560px;overflow:auto;">
+                <table class="sheet-table" id="adjustmentPreviewTable">
+                    <thead>
+                        <tr>
+                            <th>比對狀態</th><th>品項代號</th><th>品項名稱</th><th>倉庫</th><th>單位</th>
+                            <th>原庫存</th><th>新結餘</th><th>結餘差額</th><th>實盤數量</th>
+                            <th>原盤盈虧</th><th>校正後盤盈虧</th><th>單位成本</th><th>校正後金額</th>
+                        </tr>
+                    </thead>
+                    <tbody><tr><td colspan="13" style="text-align:center;color:#94a3b8;">請先選擇期別及結餘 Excel。</td></tr></tbody>
+                </table>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+                <button id="saveAdjustmentBtn" class="upload-btn" style="margin-top:0;background:#047857;" onclick="saveBalanceAdjustment()" disabled>☁️ 保存校正紀錄</button>
+            </div>
+            <p style="font-size:.82rem;color:#64748b;margin-top:8px;">儲存時只會將校正摘要與明細保存至 Cloud Firestore，不會上傳或保存原始 Excel；原本 inventory_history 不會被修改。</p>
+        </div>
+
+        <hr style="border:0;border-top:1px solid #e2e8f0;margin:24px 0;">
+        <h4>🗂️ 已保存的結餘校正紀錄</h4>
+        <div id="adjustmentHistoryList" style="color:#64748b;">尚未載入校正紀錄。</div>
+    </div>
 </div>
 
 <script>
@@ -805,7 +876,6 @@ const firebaseConfig = {
   apiKey: "AIzaSyA9khVWW9APvXRAB8AYMRZsFoNxQKGZaKI",
   authDomain: "inventory-3fca8.firebaseapp.com",
   projectId: "inventory-3fca8",
-  storageBucket: "inventory-3fca8.firebasestorage.app",
   messagingSenderId: "218623734307",
   appId: "1:218623734307:web:9dcbc5345c25bcd8e73796",
 };
@@ -832,6 +902,8 @@ try {
             document.getElementById('cloudStatusBadge').innerText = '☁️ 雲端狀態：已安全連接 (Firestore)';
             document.getElementById('cloudStatusBadge').style.background = '#10b981';
             loadCloudHistory();
+            if (adjustmentPreviewRows.length) document.getElementById('saveAdjustmentBtn').disabled = false;
+            if (document.getElementById('adjustmentTab')?.style.display === 'block') loadAdjustmentHistoryList();
         }).catch(err => {
             console.error("Firebase Auth 失敗:", err);
             document.getElementById('cloudStatusBadge').innerText = '⚠️ 雲端失敗: 請確認已啟用匿名登入';
@@ -983,6 +1055,13 @@ window.addEventListener('DOMContentLoaded', () => {
         document.getElementById('mainAppContainer').style.display = 'block';
     }
     loadLocalHistory();
+    populateAdjustmentSessionSelect();
+    const adjFileInput = document.getElementById('adjustmentFileInput');
+    if (adjFileInput) adjFileInput.addEventListener('change', () => {
+        const f = adjFileInput.files[0];
+        document.getElementById('adjustmentFileInfo').textContent = f ? `已選擇：${f.name}｜${(f.size / 1024).toFixed(1)} KB` : '尚未選擇結餘檔案。';
+        document.getElementById('saveAdjustmentBtn').disabled = true;
+    });
 });
 
 async function handleFiles(files) {
@@ -1328,6 +1407,7 @@ function updateUI() {
     renderAllKpiMatrixTable();
     renderSingleSession();
     renderHistoryChips();
+    populateAdjustmentSessionSelect();
 }
 
 function updateDropdowns() {
@@ -2135,6 +2215,393 @@ function fmtInt(val) { const n = Number(val); return (Number.isFinite(n) ? Math.
 function fmtPct(val) { return !val ? '0.00%' : (val * 100).toFixed(2) + '%'; }
 function fmtPct3(val) { return !val ? '0.000%' : (val * 100).toFixed(3) + '%'; }
 
+
+// ==========================================
+// 🧮 結餘差異校正：獨立資料與原始 Excel 保存
+// ==========================================
+let adjustmentPreviewRows = [];
+let adjustmentSourceFile = null;
+let adjustmentSourceSession = null;
+let adjustmentSourceSummary = null;
+let adjustmentHistoryLoaded = false;
+
+function normalizeAdjustmentKeyPart(value) {
+    return String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
+}
+
+function adjustmentKey(code, warehouse) {
+    return normalizeAdjustmentKeyPart(code) + '||' + normalizeAdjustmentKeyPart(warehouse);
+}
+
+function showAdjustmentMessage(message, type = 'info') {
+    const el = document.getElementById('adjustmentMessage');
+    if (!el) return;
+    const styles = {
+        info: 'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;',
+        success: 'background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;',
+        warning: 'background:#fffbeb;color:#92400e;border:1px solid #fde68a;',
+        error: 'background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;'
+    };
+    el.style.cssText = 'display:block;padding:10px 14px;border-radius:8px;margin:10px 0;line-height:1.6;' + (styles[type] || styles.info);
+    el.textContent = message;
+}
+
+function populateAdjustmentSessionSelect() {
+    const select = document.getElementById('adjustmentSessionSelect');
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML = '';
+    const sorted = [...historySessions].sort((a, b) => {
+        const da = parseBaseDateFromStr(a.dateStr), dbb = parseBaseDateFromStr(b.dateStr);
+        if (da && dbb) return dbb.getTime() - da.getTime();
+        return String(b.dateStr || '').localeCompare(String(a.dateStr || ''), 'zh-TW', { numeric: true });
+    });
+    if (!sorted.length) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '尚無盤點期別，請先上傳盤點 Excel';
+        select.appendChild(opt);
+        return;
+    }
+    sorted.forEach(session => {
+        const opt = document.createElement('option');
+        opt.value = session.id;
+        opt.textContent = `${session.dateStr}｜${session.fileName || '未命名盤點檔'}`;
+        select.appendChild(opt);
+    });
+    if (sorted.some(s => s.id === previous)) select.value = previous;
+    else if (selectedSessionId && sorted.some(s => s.id === selectedSessionId)) select.value = selectedSessionId;
+}
+
+function parseBalanceWorkbook(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('無法讀取上傳檔案。'));
+        reader.onload = event => {
+            try {
+                const workbook = XLSX.read(event.target.result, { type: 'array', raw: false });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) throw new Error('Excel 沒有工作表。');
+                const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, raw: false, defval: '' });
+                let headerIndex = -1;
+                let col = {};
+                for (let i = 0; i < Math.min(rows.length, 30); i++) {
+                    const headers = (rows[i] || []).map(v => normalizeAdjustmentKeyPart(v).replace(/\s/g, ''));
+                    const find = keys => headers.findIndex(h => keys.some(k => h.includes(k)));
+                    const candidate = {
+                        code: find(['品項代號', '料號', '品號']),
+                        name: find(['品項名稱', '品項', '品名']),
+                        unit: find(['庫存單位', '單位']),
+                        warehouse: find(['倉庫', '倉別']),
+                        qty: find(['庫存量', '庫存數量', '結餘數量', '庫存數'])
+                    };
+                    if (candidate.code >= 0 && candidate.warehouse >= 0 && candidate.qty >= 0) {
+                        headerIndex = i; col = candidate; break;
+                    }
+                }
+                if (headerIndex < 0) throw new Error('找不到必要欄位。需要：品項代號、倉庫、庫存量；品項與單位可選。');
+                const records = [];
+                for (let i = headerIndex + 1; i < rows.length; i++) {
+                    const row = rows[i] || [];
+                    const code = normalizeAdjustmentKeyPart(row[col.code]);
+                    const warehouse = normalizeAdjustmentKeyPart(row[col.warehouse]);
+                    if (!code || !warehouse) continue;
+                    const qtyText = String(row[col.qty] ?? '').replace(/[$,\s\tNT]/g, '');
+                    const qty = Number.parseFloat(qtyText);
+                    if (!Number.isFinite(qty)) continue;
+                    records.push({
+                        code,
+                        name: col.name >= 0 ? String(row[col.name] ?? '').trim() : '',
+                        unit: col.unit >= 0 ? normalizeAdjustmentKeyPart(row[col.unit]) : '',
+                        warehouse,
+                        stockQty: qty,
+                        sourceRow: i + 1
+                    });
+                }
+                if (!records.length) throw new Error('有找到欄位，但沒有讀到有效的結餘資料。');
+                resolve({ records, sheetName, rowCount: records.length });
+            } catch (err) { reject(err); }
+        };
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+async function previewBalanceAdjustment() {
+    const sessionId = document.getElementById('adjustmentSessionSelect').value;
+    const file = document.getElementById('adjustmentFileInput').files[0];
+    if (!sessionId) return showAdjustmentMessage('請先選擇原盤點期別。', 'warning');
+    if (!file) return showAdjustmentMessage('請先選擇結餘 Excel 檔案。', 'warning');
+    const session = historySessions.find(s => s.id === sessionId);
+    if (!session || !Array.isArray(session.rawData)) return showAdjustmentMessage('找不到該期原始盤點明細，無法校正。', 'error');
+
+    const btn = document.querySelector('#adjustmentTab button[onclick="previewBalanceAdjustment()"]');
+    if (btn) { btn.disabled = true; btn.textContent = '讀取比對中…'; }
+    try {
+        const parsed = await parseBalanceWorkbook(file);
+        const oldRows = (session.rawData || []).filter(r => normalizeAdjustmentKeyPart(r.code) && normalizeAdjustmentKeyPart(r.warehouse));
+        const oldMap = new Map(), newMap = new Map();
+        oldRows.forEach(row => {
+            const key = adjustmentKey(row.code, row.warehouse);
+            if (!oldMap.has(key)) oldMap.set(key, []);
+            oldMap.get(key).push(row);
+        });
+        parsed.records.forEach(row => {
+            const key = adjustmentKey(row.code, row.warehouse);
+            if (!newMap.has(key)) newMap.set(key, []);
+            newMap.get(key).push(row);
+        });
+
+        const result = [];
+        const seenNewKeys = new Set();
+        oldRows.forEach(old => {
+            const key = adjustmentKey(old.code, old.warehouse);
+            const oldGroup = oldMap.get(key) || [];
+            const newGroup = newMap.get(key) || [];
+            if (oldGroup.length > 1 || newGroup.length > 1) {
+                result.push({
+                    status: '重複資料需確認', exception: true, code: old.code, name: old.name,
+                    warehouse: old.warehouse, unit: old.unit, oldStockQty: Number(old.stockQty) || 0,
+                    newStockQty: newGroup.length === 1 ? newGroup[0].stockQty : null,
+                    deltaQty: null, checkQty: Number(old.checkQty) || 0, oldDiffQty: Number(old.diffQty) || 0,
+                    correctedDiffQty: null, cost: Number(old.cost) || 0, correctedDiffAmt: null,
+                    oldDiffAmt: Number(old.diffAmt) || 0, key
+                });
+                seenNewKeys.add(key);
+                return;
+            }
+            if (!newGroup.length) {
+                result.push({
+                    status: '新結餘缺漏', exception: true, code: old.code, name: old.name,
+                    warehouse: old.warehouse, unit: old.unit, oldStockQty: Number(old.stockQty) || 0,
+                    newStockQty: null, deltaQty: null, checkQty: Number(old.checkQty) || 0,
+                    oldDiffQty: Number(old.diffQty) || 0, correctedDiffQty: null,
+                    cost: Number(old.cost) || 0, correctedDiffAmt: null, oldDiffAmt: Number(old.diffAmt) || 0, key
+                });
+                return;
+            }
+            seenNewKeys.add(key);
+            const newer = newGroup[0];
+            const oldUnit = normalizeAdjustmentKeyPart(old.unit);
+            const newUnit = normalizeAdjustmentKeyPart(newer.unit);
+            if (oldUnit && newUnit && oldUnit !== newUnit) {
+                result.push({
+                    status: '單位不一致', exception: true, code: old.code, name: old.name,
+                    warehouse: old.warehouse, unit: `${oldUnit} / ${newUnit}`, oldStockQty: Number(old.stockQty) || 0,
+                    newStockQty: newer.stockQty, deltaQty: null, checkQty: Number(old.checkQty) || 0,
+                    oldDiffQty: Number(old.diffQty) || 0, correctedDiffQty: null,
+                    cost: Number(old.cost) || 0, correctedDiffAmt: null, oldDiffAmt: Number(old.diffAmt) || 0, key
+                });
+                return;
+            }
+            const oldStockQty = Number(old.stockQty) || 0;
+            const oldDiffQty = Number(old.diffQty) || 0;
+            const deltaQty = newer.stockQty - oldStockQty;
+            const correctedDiffQty = oldDiffQty - deltaQty;
+            const cost = Number(old.cost) || 0;
+            result.push({
+                status: cost === 0 ? '已校正（成本為0）' : '已校正',
+                exception: false, code: old.code, name: old.name || newer.name,
+                warehouse: old.warehouse, unit: oldUnit || newUnit, oldStockQty,
+                newStockQty: newer.stockQty, deltaQty, checkQty: Number(old.checkQty) || 0,
+                oldDiffQty, correctedDiffQty, cost,
+                correctedDiffAmt: correctedDiffQty * cost, oldDiffAmt: Number(old.diffAmt) || 0, key
+            });
+        });
+
+        parsed.records.forEach(newer => {
+            const key = adjustmentKey(newer.code, newer.warehouse);
+            if (seenNewKeys.has(key) || oldMap.has(key)) return;
+            result.push({
+                status: '原盤點無此項', exception: true, code: newer.code, name: newer.name,
+                warehouse: newer.warehouse, unit: newer.unit, oldStockQty: null,
+                newStockQty: newer.stockQty, deltaQty: null, checkQty: null,
+                oldDiffQty: null, correctedDiffQty: null, cost: null,
+                correctedDiffAmt: null, oldDiffAmt: null, key
+            });
+        });
+
+        adjustmentPreviewRows = result;
+        adjustmentSourceFile = file;
+        adjustmentSourceSession = session;
+        adjustmentSourceSummary = {
+            sourceFileName: file.name,
+            sourceFileSize: file.size,
+            sheetName: parsed.sheetName,
+            sourceRowCount: parsed.rowCount,
+            matchedCount: result.filter(r => !r.exception).length,
+            exceptionCount: result.filter(r => r.exception).length,
+            correctedDiffAmt: result.filter(r => !r.exception).reduce((sum, r) => sum + (Number(r.correctedDiffAmt) || 0), 0),
+            correctedAbsDiffAmt: result.filter(r => !r.exception).reduce((sum, r) => sum + Math.abs(Number(r.correctedDiffAmt) || 0), 0),
+            correctedDiffQty: result.filter(r => !r.exception).reduce((sum, r) => sum + (Number(r.correctedDiffQty) || 0), 0),
+            correctedAbsDiffQty: result.filter(r => !r.exception).reduce((sum, r) => sum + Math.abs(Number(r.correctedDiffQty) || 0), 0)
+        };
+        document.getElementById('adjustmentSummary').style.display = 'block';
+        document.getElementById('adjMatchedCount').textContent = adjustmentSourceSummary.matchedCount.toLocaleString();
+        document.getElementById('adjExceptionCount').textContent = adjustmentSourceSummary.exceptionCount.toLocaleString();
+        document.getElementById('adjCorrectedAmount').textContent = '$' + fmtInt(adjustmentSourceSummary.correctedDiffAmt);
+        document.getElementById('adjAbsAmount').textContent = '$' + fmtInt(adjustmentSourceSummary.correctedAbsDiffAmt);
+        document.getElementById('adjustmentFileInfo').textContent = `已讀取：${file.name}｜${parsed.sheetName}｜${parsed.rowCount.toLocaleString()} 筆結餘資料`;
+        document.getElementById('saveAdjustmentBtn').disabled = !isCloudConnected || !db;
+        renderAdjustmentPreview();
+        if (adjustmentSourceSummary.exceptionCount) {
+            showAdjustmentMessage(`比對完成：成功校正 ${adjustmentSourceSummary.matchedCount} 筆，另有 ${adjustmentSourceSummary.exceptionCount} 筆需人工確認。異常資料不會自動當成 0，也不會套用校正。`, 'warning');
+        } else {
+            showAdjustmentMessage(`比對完成：${adjustmentSourceSummary.matchedCount} 筆全部成功配對，可確認後保存。`, 'success');
+        }
+    } catch (err) {
+        console.error('結餘差異校正解析失敗：', err);
+        showAdjustmentMessage(err.message || '讀取結餘檔案失敗。', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🔍 開始比對與預覽'; }
+    }
+}
+
+function renderAdjustmentPreview() {
+    const tbody = document.querySelector('#adjustmentPreviewTable tbody');
+    if (!tbody) return;
+    const filter = document.getElementById('adjustmentStatusFilter')?.value || 'all';
+    const rows = adjustmentPreviewRows.filter(r => filter === 'all' || (filter === 'corrected' ? !r.exception : r.exception));
+    tbody.innerHTML = '';
+    rows.forEach(r => {
+        const tr = document.createElement('tr');
+        const statusColor = r.exception ? '#b45309' : '#047857';
+        const values = [
+            `<span style="color:${statusColor};font-weight:700;">${escapeHTML(r.status)}</span>`,
+            escapeHTML(r.code), escapeHTML(r.name), escapeHTML(r.warehouse), escapeHTML(r.unit),
+            r.oldStockQty === null ? '-' : fmtNum(r.oldStockQty),
+            r.newStockQty === null ? '-' : fmtNum(r.newStockQty),
+            r.deltaQty === null ? '-' : fmtNum(r.deltaQty),
+            r.checkQty === null ? '-' : fmtNum(r.checkQty),
+            r.oldDiffQty === null ? '-' : fmtNum(r.oldDiffQty),
+            r.correctedDiffQty === null ? '-' : fmtNum(r.correctedDiffQty),
+            r.cost === null ? '-' : fmtNum(r.cost, 4),
+            r.correctedDiffAmt === null ? '-' : '$' + fmtInt(r.correctedDiffAmt)
+        ];
+        tr.innerHTML = values.map(v => `<td>${v}</td>`).join('');
+        tbody.appendChild(tr);
+    });
+    document.getElementById('adjustmentRowCount').textContent = `顯示 ${rows.length.toLocaleString()} / ${adjustmentPreviewRows.length.toLocaleString()} 筆`;
+}
+
+function exportAdjustmentExcel() {
+    if (!adjustmentPreviewRows.length) return alert('目前沒有可匯出的校正結果。');
+    const data = adjustmentPreviewRows.map(r => ({
+        比對狀態: r.status, 品項代號: r.code, 品項名稱: r.name, 倉庫: r.warehouse, 單位: r.unit,
+        原庫存: r.oldStockQty, 新結餘: r.newStockQty, 結餘差額: r.deltaQty, 實盤數量: r.checkQty,
+        原盤盈虧: r.oldDiffQty, 校正後盤盈虧: r.correctedDiffQty, 單位成本: r.cost,
+        原盤盈虧金額: r.oldDiffAmt, 校正後金額: r.correctedDiffAmt
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [18,16,28,22,12,14,14,14,14,14,16,14,16,16].map(w => ({ wch: w }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '結餘差異校正');
+    XLSX.writeFile(wb, `結餘差異校正_${adjustmentSourceSession?.dateStr || '未指定'}.xlsx`);
+}
+
+async function saveBalanceAdjustment() {
+    if (!adjustmentPreviewRows.length || !adjustmentSourceFile || !adjustmentSourceSession) {
+        return showAdjustmentMessage('請先完成比對預覽。', 'warning');
+    }
+    if (!isCloudConnected || !db) {
+        return showAdjustmentMessage('Firebase 尚未連線，請確認匿名登入與 Firestore 設定後再保存。', 'error');
+    }
+    const btn = document.getElementById('saveAdjustmentBtn');
+    btn.disabled = true; btn.textContent = '保存中…';
+    let docRef = null;
+    try {
+        docRef = db.collection('inventory_balance_adjustments').doc();
+        const adjustmentId = docRef.id;
+        const summary = {
+            ...adjustmentSourceSummary,
+            originalSessionId: adjustmentSourceSession.id,
+            originalSessionDate: adjustmentSourceSession.dateStr,
+            originalSessionFileName: adjustmentSourceSession.fileName || '',
+            sourceFileName: adjustmentSourceFile.name || '',
+            originalSessionKey: adjustmentSourceSession.sessionKey || '',
+            matchRule: '品項代號＋倉庫',
+            formula: '校正後盤盈虧＝原盤盈虧－(新結餘－原庫存)＝實盤數量－新結餘',
+            createdAtMs: Date.now()
+        };
+        await docRef.set({
+            id: adjustmentId,
+            ...summary,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            rowCount: adjustmentPreviewRows.length,
+            status: 'saving',
+            rowsSaved: false
+        });
+        // 明細採子集合分批寫入，避免單一 Firestore 文件超過 1 MiB 限制。
+        for (let i = 0; i < adjustmentPreviewRows.length; i += 300) {
+            const batch = db.batch();
+            adjustmentPreviewRows.slice(i, i + 300).forEach((row, offset) => {
+                const rowId = String(i + offset).padStart(6, '0');
+                batch.set(docRef.collection('rows').doc(rowId), {
+                    ...row,
+                    adjustmentId,
+                    rowIndex: i + offset
+                });
+            });
+            await batch.commit();
+        }
+        await docRef.update({ status: 'saved', rowsSaved: true, savedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        showAdjustmentMessage(`已保存校正紀錄！${adjustmentPreviewRows.length.toLocaleString()} 筆明細已寫入 Cloud Firestore；原始 Excel 未上傳或保存。`, 'success');
+        adjustmentHistoryLoaded = false;
+        await loadAdjustmentHistoryList();
+    } catch (err) {
+        console.error('保存結餘校正失敗：', err);
+        showAdjustmentMessage(`保存失敗：${err.message || err.code || '未知錯誤'}。請檢查 Firestore Rules 與匿名登入設定。`, 'error');
+        if (docRef) {
+            try {
+                const partialRows = await docRef.collection('rows').get();
+                for (let i = 0; i < partialRows.docs.length; i += 400) {
+                    const cleanupBatch = db.batch();
+                    partialRows.docs.slice(i, i + 400).forEach(d => cleanupBatch.delete(d.ref));
+                    await cleanupBatch.commit();
+                }
+                await docRef.delete();
+            } catch (cleanupErr) { console.warn('清理未完成的 Firestore 校正紀錄失敗', cleanupErr); }
+        }
+    } finally {
+        btn.disabled = false; btn.textContent = '☁️ 保存校正紀錄';
+    }
+}
+
+async function loadAdjustmentHistoryList() {
+    const container = document.getElementById('adjustmentHistoryList');
+    if (!container) return;
+    if (!isCloudConnected || !db) {
+        container.textContent = 'Firebase 尚未連線，校正歷史需在雲端連線後載入。';
+        return;
+    }
+    container.textContent = '讀取校正歷史中…';
+    try {
+        const snapshot = await db.collection('inventory_balance_adjustments').where('status', '==', 'saved').get();
+        const records = [];
+        snapshot.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
+        records.sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0));
+        if (!records.length) {
+            container.textContent = '目前尚無已保存的結餘校正紀錄。';
+            adjustmentHistoryLoaded = true;
+            return;
+        }
+        container.innerHTML = records.map(r => `
+            <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:12px;border:1px solid #e2e8f0;border-radius:8px;margin:8px 0;background:#fff;">
+                <div>
+                    <strong>${escapeHTML(r.originalSessionDate || '')}｜${escapeHTML(r.sourceFileName || '')}</strong>
+                    <div style="font-size:.82rem;color:#64748b;margin-top:4px;">
+                        配對 ${Number(r.matchedCount || 0).toLocaleString()} 筆｜異常 ${Number(r.exceptionCount || 0).toLocaleString()} 筆｜校正金額 $${fmtInt(r.correctedDiffAmt || 0)}
+                    </div>
+                </div>
+                <span style="color:#047857;font-size:.85rem;font-weight:700;">已保存校正資料</span>
+            </div>`).join('');
+        adjustmentHistoryLoaded = true;
+    } catch (err) {
+        console.error('讀取校正歷史失敗：', err);
+        container.textContent = `校正歷史讀取失敗：${err.message || err.code || '未知錯誤'}`;
+    }
+}
+
+
 function switchMainTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById('trendTab').style.display = 'none';
@@ -2142,6 +2609,7 @@ function switchMainTab(tabName) {
     document.getElementById('singleTab').style.display = 'none';
     document.getElementById('detailTab').style.display = 'none';
     document.getElementById('manageTab').style.display = 'none';
+    document.getElementById('adjustmentTab').style.display = 'none';
 
     if (tabName === 'trend') {
         document.querySelectorAll('.tab-btn')[0].classList.add('active');
@@ -2161,6 +2629,11 @@ function switchMainTab(tabName) {
     } else if (tabName === 'manage') {
         document.querySelectorAll('.tab-btn')[4].classList.add('active');
         document.getElementById('manageTab').style.display = 'block';
+    } else if (tabName === 'adjustment') {
+        document.querySelectorAll('.tab-btn')[5].classList.add('active');
+        document.getElementById('adjustmentTab').style.display = 'block';
+        populateAdjustmentSessionSelect();
+        if (!adjustmentHistoryLoaded) loadAdjustmentHistoryList();
     }
 }
 
